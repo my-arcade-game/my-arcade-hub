@@ -4,8 +4,8 @@
 
 const AudioSystem = (() => {
   let ctx = null;
-  let activeSelectAudio = null; // Separate channel for pick/select audio
-  let activeWinnerAudio = null; // Separate channel for winner audio
+  let activeSelectAudio = null;
+  let activeWinnerAudio = null;
 
   const audioPool = {};
 
@@ -35,14 +35,27 @@ const AudioSystem = (() => {
     if (!ctx) {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (ctx.state === 'suspended') {
-      ctx.resume();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
     }
     return ctx;
   }
 
+  function unlock() {
+    const audioCtx = getContext();
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    try {
+      const silentAudio = new Audio();
+      silentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+      silentAudio.play().catch(() => {});
+    } catch (e) {}
+  }
+
   function playFile(filename) {
     try {
+      unlock();
       if (!audioPool[filename]) {
         audioPool[filename] = new Audio(`assets/sounds/${filename}`);
       }
@@ -52,7 +65,6 @@ const AudioSystem = (() => {
     } catch (e) {}
   }
 
-  // Stops ONLY the character select audio (get_pick.mp3)
   function stopCountrySound() {
     if (activeSelectAudio) {
       activeSelectAudio.pause();
@@ -61,10 +73,10 @@ const AudioSystem = (() => {
     }
   }
 
-  // Plays get_pick.mp3 on selection
   function playCountrySound(countryId) {
     stopCountrySound();
     try {
+      unlock();
       activeSelectAudio = new Audio('assets/sounds/get_pick.mp3');
       activeSelectAudio.volume = 0.85;
       activeSelectAudio.play().catch(() => {});
@@ -75,7 +87,6 @@ const AudioSystem = (() => {
     playCountrySound();
   }
 
-  // Stops select sound and plays winner sound on its own independent channel
   function playWinnerSound() {
     stopCountrySound();
 
@@ -87,6 +98,7 @@ const AudioSystem = (() => {
 
     const winnerFile = Math.random() < 0.5 ? 'winner_1.mp3' : 'winner_2.mp3';
     try {
+      unlock();
       activeWinnerAudio = new Audio(`assets/sounds/${winnerFile}`);
       activeWinnerAudio.volume = 0.95;
       activeWinnerAudio.play().catch(() => {});
@@ -95,6 +107,7 @@ const AudioSystem = (() => {
 
   function playVoice(type, callbacks = {}) {
     stopCountrySound();
+    unlock();
 
     const onEnded = typeof callbacks === 'function' ? callbacks : callbacks.onEnded;
     const onHalfway = callbacks.onHalfway;
@@ -149,6 +162,7 @@ const AudioSystem = (() => {
 
   function playUltiSound(callback) {
     try {
+      unlock();
       const audio = new Audio('assets/sounds/ulti.mp3');
       audio.volume = 0.85;
       let called = false;
@@ -164,7 +178,7 @@ const AudioSystem = (() => {
       audio.onerror = finish;
       audio.play().catch(() => finish());
 
-      setTimeout(finish, 4000);
+      setTimeout(finish, 3500);
     } catch (e) {
       if (callback) callback();
     }
@@ -274,6 +288,7 @@ const AudioSystem = (() => {
   }
 
   return { 
+    unlock,
     play, 
     playFile, 
     playCountrySound, 

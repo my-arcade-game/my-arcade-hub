@@ -518,15 +518,13 @@
 <script src="js/battle.js"></script>
 <script src="js/main.js"></script>
 
-<!-- MOBILE TOUCH AUDIO UNLOCKER -->
+
+  <!-- MOBILE TOUCH AUDIO UNLOCKER -->
 <script>
   (function initMobileSupport() {
     function unlockAudio() {
-      if (window.AudioSystem && window.AudioSystem.ctx && window.AudioSystem.ctx.state === 'suspended') {
-        window.AudioSystem.ctx.resume();
-      }
-      if (window.AudioSystem && window.AudioSystem.playFile) {
-        window.AudioSystem.playFile('bounce.mp3');
+      if (window.AudioSystem && window.AudioSystem.unlock) {
+        window.AudioSystem.unlock();
       }
       window.removeEventListener('touchstart', unlockAudio);
       window.removeEventListener('click', unlockAudio);

@@ -507,14 +507,13 @@ var BattleSystem = (() => {
     triggerShake(24, 12);
 
     if (window.AudioSystem && window.AudioSystem.playUltiSound) {
-      window.AudioSystem.playUltiSound(() => {
-        overlay.classList.remove('show');
-      });
-    } else {
-      setTimeout(() => {
-        overlay.classList.remove('show');
-      }, 1200);
+      window.AudioSystem.playUltiSound();
     }
+
+    if (window.bannerTimeout) clearTimeout(window.bannerTimeout);
+    window.bannerTimeout = setTimeout(() => {
+      overlay.classList.remove('show');
+    }, 1800);
   }
 
   // FRANCE ABILITY
