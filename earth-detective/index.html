@@ -18,11 +18,11 @@
 </head>
 <body>
 
-    <audio id="bgm" src="bgm_1.mp3"></audio>
+    <audio id="bgm" preload="auto" src="bgm_1.mp3"></audio>
     <audio id="sfx-ticking" loop preload="auto" src="ticking.mp3"></audio>
-    <audio id="sfx-guess" src="guess.mp3"></audio>
-    <audio id="sfx-lose" src="lose.mp3"></audio>
-    <audio id="sfx-win" src="win_1.mp3"></audio>
+    <audio id="sfx-guess" preload="auto" src="guess.mp3"></audio>
+    <audio id="sfx-lose" preload="auto" src="lose.mp3"></audio>
+    <audio id="sfx-win" preload="auto" src="win_1.mp3"></audio>
 
     <!-- MOBILE ARCADE CABINET CONTAINER -->
     <div id="game-container">
@@ -81,16 +81,16 @@
             </div>
 
             <div id="guess-map-container">
-    <div id="map-header">
-        <div id="drag-handle">
-            <span class="drag-dots">⋮⋮</span>
-            <span id="drag-text">Move Map</span>
-        </div>
-        <button id="size-btn" type="button">🔍 Expand Map</button>
-    </div>
-    <div id="map"></div>
-    <button id="guess-btn" type="button">Make Guess</button>
-</div>
+                <div id="map-header">
+                    <div id="drag-handle">
+                        <span class="drag-dots">⋮⋮</span>
+                        <span id="drag-text">Move Map</span>
+                    </div>
+                    <button id="size-btn" type="button">🔍 Expand Map</button>
+                </div>
+                <div id="map"></div>
+                <button id="guess-btn" type="button">Make Guess</button>
+            </div>
         </div>
 
         <!-- 4. IN-GAME CUSTOM MODAL POPUP -->
@@ -110,20 +110,15 @@
     <!-- MOBILE TOUCH AUDIO UNLOCKER -->
     <script>
       (function initMobileSupport() {
-        function unlockAudio() {
-          const bgm = document.getElementById('bgm');
-          if (bgm) {
-            bgm.play().then(() => bgm.pause()).catch(() => {});
+        function handleFirstTouch() {
+          if (window.unlockAllAudio) {
+            window.unlockAllAudio();
           }
-          if (window.AudioContext || window.webkitAudioContext) {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            if (ctx.state === 'suspended') ctx.resume();
-          }
-          window.removeEventListener('touchstart', unlockAudio);
-          window.removeEventListener('click', unlockAudio);
+          window.removeEventListener('touchstart', handleFirstTouch);
+          window.removeEventListener('click', handleFirstTouch);
         }
-        window.addEventListener('touchstart', unlockAudio, { once: true });
-        window.addEventListener('click', unlockAudio, { once: true });
+        window.addEventListener('touchstart', handleFirstTouch, { once: true });
+        window.addEventListener('click', handleFirstTouch, { once: true });
       })();
     </script>
 </body>

@@ -15,6 +15,7 @@ let roundTimerInterval = null;
 let timeRemaining = 30;
 let maxTimerSetting = 30;
 let maxHpSetting = 10000;
+let isAudioUnlocked = false;
 
 // UI Screens
 const screens = {
@@ -36,12 +37,81 @@ const audio = {
 const bgmTracks = ['bgm_1.mp3', 'bgm_2.mp3'];
 const winTracks = ['win_1.mp3', 'win_2.mp3'];
 
+// --- ROBUST MOBILE AUDIO UNLOCKER & SFX MANAGER ---
+function unlockAllAudio() {
+    if (isAudioUnlocked) return;
+    isAudioUnlocked = true;
+
+    if (window.AudioContext || window.webkitAudioContext) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    }
+
+    const allElements = [audio.bgm, audio.ticking, audio.guess, audio.lose, audio.win];
+    allElements.forEach(el => {
+        if (el) {
+            el.volume = 0.01;
+            el.play().then(() => {
+                el.pause();
+                el.currentTime = 0;
+                el.volume = 1.0;
+            }).catch(() => {
+                el.volume = 1.0;
+            });
+        }
+    });
+
+    // Pre-prime extra dynamic tracks
+    bgmTracks.concat(winTracks).forEach(filename => {
+        const temp = new Audio(filename);
+        temp.volume = 0.01;
+        temp.play().then(() => {
+            temp.pause();
+            temp.currentTime = 0;
+        }).catch(() => {});
+    });
+}
+window.unlockAllAudio = unlockAllAudio;
+
+function playSFX(key) {
+    unlockAllAudio();
+    const original = audio[key];
+    if (!original) return;
+
+    try {
+        const clone = original.cloneNode();
+        clone.volume = 1.0;
+        clone.play().catch(err => console.warn(`SFX ${key} blocked:`, err));
+    } catch (e) {
+        original.currentTime = 0;
+        original.play().catch(() => {});
+    }
+}
+
+function playRandomBGM() {
+    if (!musicPlaying) return;
+    unlockAllAudio();
+    const randomTrack = bgmTracks[Math.floor(Math.random() * bgmTracks.length)];
+    audio.bgm.src = randomTrack;
+    audio.bgm.loop = true;
+    audio.bgm.volume = 0.8;
+    audio.bgm.play().catch(err => console.log("BGM playback stalled: ", err));
+}
+
+function playRandomWin() {
+    unlockAllAudio();
+    const randomTrack = winTracks[Math.floor(Math.random() * winTracks.length)];
+    audio.win.src = randomTrack;
+    audio.win.volume = 1.0;
+    audio.win.play().catch(err => console.log("Win sound error: ", err));
+}
+
 // High-quality fallback locations if Wikidata or external image hotlinking fails
 const fallbackLocations = [
-    { pic: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000&auto=format&fit=crop", lat: 37.8651, lng: -119.5383 }, // Yosemite
-    { pic: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=1000&auto=format&fit=crop", lat: 48.8584, lng: 2.2945 },    // Eiffel Tower
-    { pic: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1000&auto=format&fit=crop", lat: 46.0207, lng: 14.4822 },   // Lake Bled
-    { pic: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1000&auto=format&fit=crop", lat: 25.1972, lng: 55.2744 }    // Burj Khalifa
+    { pic: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000&auto=format&fit=crop", lat: 37.8651, lng: -119.5383 },
+    { pic: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=1000&auto=format&fit=crop", lat: 48.8584, lng: 2.2945 },
+    { pic: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1000&auto=format&fit=crop", lat: 46.0207, lng: 14.4822 },
+    { pic: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1000&auto=format&fit=crop", lat: 25.1972, lng: 55.2744 }
 ];
 
 // Fallback image handler for CORB / 404 image load errors
@@ -72,19 +142,6 @@ function customAlert(message) {
         
         okBtn.addEventListener('click', handleOk);
     });
-}
-
-function playRandomBGM() {
-    const randomTrack = bgmTracks[Math.floor(Math.random() * bgmTracks.length)];
-    audio.bgm.src = randomTrack;
-    audio.bgm.loop = true;
-    audio.bgm.play().catch(err => console.log(err));
-}
-
-function playRandomWin() {
-    const randomTrack = winTracks[Math.floor(Math.random() * winTracks.length)];
-    audio.win.src = randomTrack;
-    audio.win.play().catch(err => console.log(err));
 }
 
 // --- 2. LANGUAGE DICTIONARY ---
@@ -196,7 +253,6 @@ async function loadNewRound() {
     const randomLocation = locationsList[randomIndex];
     locationsList.splice(randomIndex, 1); 
 
-    // Convert Wikidata HTTP links to HTTPS to avoid CORB / mixed content blocks
     let imageUrl = randomLocation.pic.value;
     if (imageUrl.startsWith('http://')) {
         imageUrl = imageUrl.replace('http://', 'https://');
@@ -217,12 +273,11 @@ const sizeBtn = document.getElementById('size-btn');
 
 let isDragging = false;
 let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
-let currentSizeMode = 'medium'; // Modes: 'small', 'medium', 'big'
+let currentSizeMode = 'medium'; 
 
 if (mapHeader) {
-    // Pointer Dragging Handler (Touch + Mouse)
     mapHeader.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('#size-btn')) return; // Don't drag when tapping size button
+        if (e.target.closest('#size-btn')) return;
         
         isDragging = true;
         mapHeader.setPointerCapture(e.pointerId);
@@ -236,7 +291,6 @@ if (mapHeader) {
         startX = e.clientX;
         startY = e.clientY;
         
-        // Convert from bottom-anchored positioning to explicit top/left offset
         mapContainer.style.bottom = 'auto';
         mapContainer.style.right = 'auto';
         mapContainer.style.left = `${initialLeft}px`;
@@ -255,7 +309,6 @@ if (mapHeader) {
         let newLeft = initialLeft + dx;
         let newTop = initialTop + dy;
         
-        // Clamp strictly inside #game-container boundary frame
         const maxLeft = gameRect.width - containerRect.width;
         const maxTop = gameRect.height - containerRect.height;
         
@@ -277,7 +330,6 @@ if (mapHeader) {
     mapHeader.addEventListener('pointercancel', stopDrag);
 }
 
-// 3-Stage Size Toggle Handler (Small -> Medium -> Big)
 if (sizeBtn) {
     sizeBtn.addEventListener('click', function() {
         mapContainer.classList.remove('small-mode', 'medium-mode', 'big-mode');
@@ -295,7 +347,6 @@ if (sizeBtn) {
         
         updateSizeButtonLabel();
         
-        // Auto-adjust top position if expanded height overflows container bottom
         const gameRect = gameContainer.getBoundingClientRect();
         const containerRect = mapContainer.getBoundingClientRect();
         if (containerRect.top + containerRect.height > gameRect.height) {
@@ -310,6 +361,7 @@ if (sizeBtn) {
 const playerBtns = document.querySelectorAll('.player-btn');
 playerBtns.forEach(btn => {
     btn.addEventListener('click', function() {
+        unlockAllAudio();
         playerBtns.forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         selectedPlayerCount = parseInt(this.getAttribute('data-count'));
@@ -317,11 +369,12 @@ playerBtns.forEach(btn => {
 });
 
 document.getElementById('toggle-music-btn').addEventListener('click', function() {
+    unlockAllAudio();
     musicPlaying = !musicPlaying;
     this.innerText = musicPlaying ? "🔊 Music: ON" : "🔊 Music: OFF";
     if (musicPlaying) {
         if (screens.game.style.display === 'block' && timeRemaining <= 10 && maxTimerSetting <= 5000) {
-            audio.ticking.play();
+            audio.ticking.play().catch(() => {});
         } else {
             playRandomBGM();
         }
@@ -332,6 +385,7 @@ document.getElementById('toggle-music-btn').addEventListener('click', function()
 });
 
 document.getElementById('start-game-btn').addEventListener('click', function() {
+    unlockAllAudio();
     maxHpSetting = parseInt(document.getElementById('starting-hp').value);
     maxTimerSetting = parseInt(document.getElementById('timer-setting').value);
     
@@ -410,7 +464,7 @@ function startRoundClockCountdown() {
             }
             
             if (audio.ticking.paused) {
-                audio.ticking.play().catch(err => console.log("Audio playback stalled: ", err)); 
+                audio.ticking.play().catch(err => console.log("Ticking playback stalled: ", err)); 
             }
         }
         
@@ -452,6 +506,7 @@ function showTurnScreen() {
 }
 
 document.getElementById('begin-turn-btn').addEventListener('click', function() {
+    unlockAllAudio();
     screens.turn.style.display = 'none';
     screens.game.style.display = 'block';
     
@@ -468,7 +523,7 @@ async function handleTimeExpirationPenalty() {
     const penaltyDamage = 5000;
     let p = players[currentPlayerIndex];
     
-    audio.lose.play().catch(err => console.log(err));
+    playSFX('lose');
 
     await customAlert(`⏰ TIME EXPIRED!\nPlayer ${p.id} stood frozen and took a ${penaltyDamage} HP penalty! ⚡`);
     
@@ -481,9 +536,10 @@ async function handleTimeExpirationPenalty() {
 }
 
 document.getElementById('guess-btn').addEventListener('click', async function() {
+    unlockAllAudio();
     if (userMarker === null) return await customAlert("Drop a pin first!");
     
-    audio.guess.play().catch(err => console.log(err)); 
+    playSFX('guess'); 
 
     stopRoundClockCountdown(); 
     document.getElementById('guess-btn').style.display = 'none';
@@ -510,11 +566,10 @@ document.getElementById('guess-btn').addEventListener('click', async function() 
 async function evaluatePostTurnRules(player, damageTaken) {
     if (player.hp <= 0) {
         player.alive = false;
-        
         const aliveCount = players.filter(pl => pl.alive).length;
         
-        if (aliveCount >= 2) {
-            audio.lose.play().catch(err => console.log(err));
+        if (aliveCount >= 1) {
+            playSFX('lose');
         }
         
         await customAlert(`Player ${player.id} took ${damageTaken} damage and is ELIMINATED! 💀`);
