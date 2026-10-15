@@ -1,5 +1,5 @@
 // ==========================================
-// PASSIVE.JS - BALANCED PASSIVE ABILITIES WITH AUDIO
+// PASSIVE.JS - BALANCED PASSIVE ABILITIES WITH AUDIO & CLEAR VISUAL AURAS
 // ==========================================
 
 function triggerPassiveSound() {
@@ -46,15 +46,14 @@ var PassiveSystem = {
     },
     onUpdate: function(ball) { if (ball.passiveTimer > 0) ball.passiveTimer--; },
     onDraw: function(ball, ctx) {
-      if (!ball.passiveTimer || ball.passiveTimer <= 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius + 6, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.restore();
-      }
+      const isReady = !ball.passiveTimer || ball.passiveTimer <= 0;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = isReady ? 'rgba(255, 255, 0, 0.95)' : 'rgba(255, 255, 0, 0.25)';
+      ctx.lineWidth = isReady ? 3.5 : 1.5;
+      ctx.stroke();
+      ctx.restore();
     },
     onEnemyUlt: function(ball, enemyBall) {}
   },
@@ -141,13 +140,15 @@ var PassiveSystem = {
       if (ball.passiveTimer <= 0) ball.passiveTimer = PassiveSystem.getInterval(ball, 8, 5);
     },
     onDraw: function(ball, ctx) {
+      const isPulseReady = ball.passiveTimer <= 30;
       ctx.save();
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, 180, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(150, 220, 255, 0.08)';
+      ctx.fillStyle = isPulseReady ? 'rgba(0, 200, 255, 0.22)' : 'rgba(150, 220, 255, 0.12)';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(150, 220, 255, 0.25)';
-      ctx.setLineDash([8, 12]);
+      ctx.strokeStyle = isPulseReady ? '#00f0ff' : 'rgba(0, 200, 255, 0.6)';
+      ctx.lineWidth = isPulseReady ? 3 : 2;
+      ctx.setLineDash([8, 8]);
       ctx.stroke();
       ctx.restore();
     },
@@ -405,15 +406,14 @@ var PassiveSystem = {
     },
     onUpdate: function(ball) { if (ball.passiveTimer > 0) ball.passiveTimer--; },
     onDraw: function(ball, ctx) {
-      if (!ball.passiveTimer || ball.passiveTimer <= 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius + 6, 0, Math.PI * 2);
-        ctx.strokeStyle = '#d800ff';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.restore();
-      }
+      const isReady = !ball.passiveTimer || ball.passiveTimer <= 0;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = isReady ? '#d800ff' : 'rgba(216, 0, 255, 0.25)';
+      ctx.lineWidth = isReady ? 3.5 : 1.5;
+      ctx.stroke();
+      ctx.restore();
     },
     onEnemyUlt: function(ball, enemyBall) {}
   },
@@ -559,8 +559,8 @@ var PassiveSystem = {
         ctx.save();
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius + 12, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+        ctx.lineWidth = 3;
         ctx.stroke();
         ctx.restore();
       }
@@ -650,18 +650,17 @@ var PassiveSystem = {
       }
     },
     onDraw: function(ball, ctx) {
-      if (!ball.passiveTimer || ball.passiveTimer <= 0) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, 140, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(165, 25, 49, 0.08)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(165, 25, 49, 0.45)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 8]);
-        ctx.stroke();
-        ctx.restore();
-      }
+      const isReady = !ball.passiveTimer || ball.passiveTimer <= 0;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, 140, 0, Math.PI * 2);
+      ctx.fillStyle = isReady ? 'rgba(165, 25, 49, 0.12)' : 'rgba(165, 25, 49, 0.03)';
+      ctx.fill();
+      ctx.strokeStyle = isReady ? 'rgba(255, 50, 80, 0.85)' : 'rgba(165, 25, 49, 0.25)';
+      ctx.lineWidth = isReady ? 2.5 : 1.2;
+      ctx.setLineDash(isReady ? [8, 6] : [4, 8]);
+      ctx.stroke();
+      ctx.restore();
     },
     onEnemyUlt: function(ball, enemyBall) {}
   },
@@ -726,12 +725,16 @@ var PassiveSystem = {
       ball.zeroKnockbackFlag = false;
     },
     onDraw: function(ball, ctx) {
-      if (!ball.passiveTimer || ball.passiveTimer <= 0) {
+      const isReady = !ball.passiveTimer || ball.passiveTimer <= 0;
+      if (isReady) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y - ball.radius - 8, 5, 0, Math.PI * 2);
+        ctx.arc(ball.x, ball.y - ball.radius - 8, 6, 0, Math.PI * 2);
         ctx.fillStyle = '#ffd700';
         ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
         ctx.restore();
       }
     },
