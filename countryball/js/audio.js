@@ -1,13 +1,17 @@
 // ==========================================
-// AUDIO.JS - DEDICATED SOUND MANAGER
+// AUDIO.JS - DEDICATED SOUND MANAGER (MOBILE FIX)
 // ==========================================
 
 const AudioSystem = (() => {
   let ctx = null;
-  let activeSelectAudio = null;
-  let activeWinnerAudio = null;
+  let isUnlocked = false;
 
-  const audioPool = {};
+  // Active playing sources for controllable sounds
+  let activeSelectSource = null;
+  let activeWinnerSource = null;
+
+  // Memory cache for decoded audio buffers
+  const bufferCache = {};
 
   const WEAPON_SOUND_MAP = {
     '🗡️': 'slice.mp3',
@@ -31,9 +35,15 @@ const AudioSystem = (() => {
     '🍦': 'slice.mp3'
   };
 
+  /**
+   * Lazily initializes and returns the primary AudioContext
+   */
   function getContext() {
     if (!ctx) {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        ctx = new AudioContextClass();
+      }
     }
     if (ctx && ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
@@ -41,44 +51,112 @@ const AudioSystem = (() => {
     return ctx;
   }
 
+  /**
+   * Global unlock trigger for iOS Safari and Android WebViews
+   */
   function unlock() {
     const audioCtx = getContext();
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().catch(() => {});
+    if (!audioCtx) return;
+
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        isUnlocked = true;
+      }).catch(() => {});
+    } else {
+      isUnlocked = true;
     }
-    try {
-      const silentAudio = new Audio();
-      silentAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-      silentAudio.play().catch(() => {});
-    } catch (e) {}
   }
 
-  function playFile(filename) {
+  // Bind one-time listeners to auto-unlock audio on first screen touch/tap
+  const unlockEvents = ['pointerdown', 'touchstart', 'click', 'keydown'];
+  const handleAutoUnlock = () => {
+    unlock();
+    if (isUnlocked) {
+      unlockEvents.forEach(evt => window.removeEventListener(evt, handleAutoUnlock, true));
+    }
+  };
+  unlockEvents.forEach(evt => window.addEventListener(evt, handleAutoUnlock, true));
+
+  /**
+   * Fetches and decodes sound files into Web Audio API buffers
+   */
+  async function loadBuffer(filename) {
+    if (bufferCache[filename]) {
+      return bufferCache[filename];
+    }
+
+    const audioCtx = getContext();
+    if (!audioCtx) return null;
+
     try {
-      unlock();
-      // Create a fresh Audio instance per trigger for mobile compatibility
-      const audio = new Audio(`assets/sounds/${filename}`);
-      audio.volume = 0.85;
-      audio.play().catch((err) => console.warn('Audio playback blocked:', err));
-    } catch (e) {}
+      const response = await fetch(`assets/sounds/${filename}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      bufferCache[filename] = decodedBuffer;
+      return decodedBuffer;
+    } catch (err) {
+      console.warn(`Audio loading error for assets/sounds/${filename}:`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Plays a decoded audio buffer through Web Audio API
+   */
+  function playBufferNode(buffer, volume = 0.85) {
+    const audioCtx = getContext();
+    if (!audioCtx || !buffer) return null;
+
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+
+    const source = audioCtx.createBufferSource();
+    const gainNode = audioCtx.createGain();
+
+    source.buffer = buffer;
+    gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+
+    source.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    source.start(0);
+
+    return { source, gainNode };
+  }
+
+  /**
+   * Main sound effect playing method
+   */
+  function playFile(filename, volume = 0.85) {
+    unlock();
+    loadBuffer(filename).then(buffer => {
+      if (buffer) {
+        playBufferNode(buffer, volume);
+      }
+    });
   }
 
   function stopCountrySound() {
-    if (activeSelectAudio) {
-      activeSelectAudio.pause();
-      activeSelectAudio.currentTime = 0;
-      activeSelectAudio = null;
+    if (activeSelectSource) {
+      try {
+        activeSelectSource.source.stop();
+      } catch (e) {}
+      activeSelectSource = null;
     }
   }
 
   function playCountrySound(countryId) {
     stopCountrySound();
-    try {
-      unlock();
-      activeSelectAudio = new Audio('assets/sounds/get_pick.mp3');
-      activeSelectAudio.volume = 0.85;
-      activeSelectAudio.play().catch(() => {});
-    } catch (e) {}
+    unlock();
+
+    loadBuffer('get_pick.mp3').then(buffer => {
+      if (buffer) {
+        activeSelectSource = playBufferNode(buffer, 0.85);
+      }
+    });
   }
 
   function playPickSound() {
@@ -88,19 +166,21 @@ const AudioSystem = (() => {
   function playWinnerSound() {
     stopCountrySound();
 
-    if (activeWinnerAudio) {
-      activeWinnerAudio.pause();
-      activeWinnerAudio.currentTime = 0;
-      activeWinnerAudio = null;
+    if (activeWinnerSource) {
+      try {
+        activeWinnerSource.source.stop();
+      } catch (e) {}
+      activeWinnerSource = null;
     }
 
     const winnerFile = Math.random() < 0.5 ? 'winner_1.mp3' : 'winner_2.mp3';
-    try {
-      unlock();
-      activeWinnerAudio = new Audio(`assets/sounds/${winnerFile}`);
-      activeWinnerAudio.volume = 0.95;
-      activeWinnerAudio.play().catch(() => {});
-    } catch (e) {}
+    unlock();
+
+    loadBuffer(winnerFile).then(buffer => {
+      if (buffer) {
+        activeWinnerSource = playBufferNode(buffer, 0.95);
+      }
+    });
   }
 
   function playVoice(type, callbacks = {}) {
@@ -109,77 +189,75 @@ const AudioSystem = (() => {
 
     const onEnded = typeof callbacks === 'function' ? callbacks : callbacks.onEnded;
     const onHalfway = callbacks.onHalfway;
-
     const filename = type === 'choose_fighter' ? 'choose_fighter.mp3' : 'fight_start.mp3';
 
-    try {
-      const audio = new Audio(`assets/sounds/${filename}`);
-      audio.volume = 0.85;
-      let calledEnded = false;
-      let calledHalfway = false;
+    let calledEnded = false;
+    let calledHalfway = false;
 
-      const finish = () => {
-        if (!calledEnded) {
-          calledEnded = true;
-          if (onEnded) onEnded();
-        }
-      };
+    const finish = () => {
+      if (!calledEnded) {
+        calledEnded = true;
+        if (onEnded) onEnded();
+      }
+    };
 
-      const triggerHalfway = () => {
-        if (!calledHalfway) {
-          calledHalfway = true;
-          if (onHalfway) onHalfway();
-        }
-      };
+    const triggerHalfway = () => {
+      if (!calledHalfway) {
+        calledHalfway = true;
+        if (onHalfway) onHalfway();
+      }
+    };
 
-      let halfwayTimer = null;
+    loadBuffer(filename).then(buffer => {
+      if (!buffer) {
+        finish();
+        return;
+      }
 
-      audio.addEventListener('play', () => {
-        if (type === 'fight_start') {
-          halfwayTimer = setTimeout(triggerHalfway, 850);
-        }
-      });
+      const playedNode = playBufferNode(buffer, 0.85);
+      if (!playedNode) {
+        finish();
+        return;
+      }
 
-      audio.ontimeupdate = () => {
-        if (audio.duration && audio.currentTime >= audio.duration * 0.45) {
-          if (halfwayTimer) clearTimeout(halfwayTimer);
-          triggerHalfway();
-        }
-      };
+      const duration = buffer.duration;
 
-      audio.onended = finish;
-      audio.onerror = finish;
+      // Handle halfway callback
+      const halfwayTime = type === 'fight_start' ? 850 : (duration * 0.45 * 1000);
+      setTimeout(triggerHalfway, halfwayTime);
 
-      audio.play().catch(() => finish());
-
-      setTimeout(finish, 3200);
-    } catch (e) {
-      if (onEnded) onEnded();
-    }
+      // Handle end callback
+      playedNode.source.onended = finish;
+      setTimeout(finish, (duration + 0.2) * 1000);
+    }).catch(() => finish());
   }
 
   function playUltiSound(callback) {
-    try {
-      unlock();
-      const audio = new Audio('assets/sounds/ulti.mp3');
-      audio.volume = 0.85;
-      let called = false;
+    unlock();
+    let called = false;
 
-      const finish = () => {
-        if (!called) {
-          called = true;
-          if (callback) callback();
-        }
-      };
+    const finish = () => {
+      if (!called) {
+        called = true;
+        if (callback) callback();
+      }
+    };
 
-      audio.onended = finish;
-      audio.onerror = finish;
-      audio.play().catch(() => finish());
+    loadBuffer('ulti.mp3').then(buffer => {
+      if (!buffer) {
+        finish();
+        return;
+      }
 
-      setTimeout(finish, 3500);
-    } catch (e) {
-      if (callback) callback();
-    }
+      const playedNode = playBufferNode(buffer, 0.85);
+      if (!playedNode) {
+        finish();
+        return;
+      }
+
+      playedNode.source.onended = finish;
+      setTimeout(finish, (buffer.duration + 0.2) * 1000);
+    }).catch(() => finish());
   }
 
   function playWeaponSound(weaponEmoji) {
@@ -197,9 +275,16 @@ const AudioSystem = (() => {
     }
   }
 
+  /**
+   * Synthesized Web Audio API sound effects
+   */
   function play(type) {
     const audioCtx = getContext();
     if (!audioCtx) return;
+
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
 
     const now = audioCtx.currentTime;
 
