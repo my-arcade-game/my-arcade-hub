@@ -56,12 +56,10 @@ const AudioSystem = (() => {
   function playFile(filename) {
     try {
       unlock();
-      if (!audioPool[filename]) {
-        audioPool[filename] = new Audio(`assets/sounds/${filename}`);
-      }
-      const audio = audioPool[filename].cloneNode();
+      // Create a fresh Audio instance per trigger for mobile compatibility
+      const audio = new Audio(`assets/sounds/${filename}`);
       audio.volume = 0.85;
-      audio.play().catch(() => {});
+      audio.play().catch((err) => console.warn('Audio playback blocked:', err));
     } catch (e) {}
   }
 
