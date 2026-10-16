@@ -86,7 +86,7 @@
       padding: 16px 10px;
       background: rgba(18, 20, 32, 0.95);
       z-index: 10;
-      overflow: hidden; /* Prevents outer screen scrollbars */
+      overflow: hidden;
     }
 
     .hidden {
@@ -172,19 +172,22 @@
       text-shadow: 1px 1px #ff0055;
     }
 
-    /* --- GRID & CUSTOM CYBERPUNK SCROLLBAR --- */
+    /* --- GRID & MOBILE SCROLLBAR FIX --- */
     .grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       width: 100%;
-      max-height: 410px;
+      flex: 1;
+      min-height: 0; /* Allows flex box child to shrink and overflow-scroll */
       overflow-y: auto;
-      overflow-x: hidden; /* Stops horizontal scrollbar */
+      overflow-x: hidden;
       padding-right: 4px;
+      margin: 6px 0;
       scrollbar-width: thin;
-      scrollbar-color: #ff0055 #0d0f18; /* Firefox support */
+      scrollbar-color: #ff0055 #0d0f18;
       touch-action: pan-y;
+      -webkit-overflow-scrolling: touch; /* Mobile iOS momentum scroll */
     }
 
     /* Webkit (Chrome, Edge, Safari) Scrollbar Styling */
@@ -205,6 +208,10 @@
 
     .grid::-webkit-scrollbar-thumb:hover {
       background: #ffe600;
+    }
+
+    .card, .card * {
+      touch-action: pan-y; /* Enable touch dragging across cards */
     }
 
     .card {
@@ -281,6 +288,7 @@
       transition: all 0.1s;
       width: 85%;
       margin: 4px 0;
+      flex-shrink: 0;
     }
 
     .btn:active {
@@ -509,7 +517,6 @@
 </div>
 
 <!-- MODULE SCRIPTS -->
-<!-- UPDATE THESE TO 'js/' INSTEAD OF 'javascript/' -->
 <script src="js/countries.js"></script>
 <script src="js/abilities.js"></script>
 <script src="js/audio.js"></script>
@@ -518,8 +525,7 @@
 <script src="js/battle.js"></script>
 <script src="js/main.js"></script>
 
-
-  <!-- MOBILE TOUCH AUDIO UNLOCKER -->
+<!-- MOBILE TOUCH AUDIO UNLOCKER -->
 <script>
   (function initMobileSupport() {
     function unlockAudio() {

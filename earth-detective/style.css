@@ -378,10 +378,10 @@ button:active {
     to { transform: scale(1.08); }
 }
 
-/* --- GUESS MAP CONTAINER (DRAGGABLE & RESIZABLE) --- */
+/* --- GUESS MAP CONTAINER (DRAGGABLE & TOGGLEABLE) --- */
 #guess-map-container {
     position: absolute;
-    bottom: 12px;
+    bottom: 58px;
     left: 12px;
     width: calc(100% - 24px);
     background: rgba(15, 23, 42, 0.92);
@@ -391,9 +391,13 @@ button:active {
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     box-shadow: 0 15px 35px rgba(0,0,0,0.7), 0 0 20px rgba(0, 0, 0, 0.4);
-    transition: width 0.2s ease, height 0.2s ease;
+    transition: opacity 0.2s ease, transform 0.2s ease;
     z-index: 1000;
     touch-action: none;
+}
+
+#guess-map-container.map-hidden {
+    display: none !important;
 }
 
 /* Header Drag Handle Bar */
@@ -436,7 +440,7 @@ button:active {
     color: #94a3b8;
 }
 
-#size-btn { 
+#close-map-btn { 
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #e2e8f0;
@@ -449,44 +453,50 @@ button:active {
     cursor: pointer;
 }
 
-#size-btn:hover { 
-    background: rgba(0, 242, 254, 0.2);
-    border-color: #00f2fe;
+#close-map-btn:hover { 
+    background: rgba(255, 51, 75, 0.3);
+    border-color: #ff334b;
+    color: #ffffff;
 }
 
-/* Map Heights for Small, Medium, Big options */
 #map {
     width: 100%;
-    height: 160px; /* Default Medium Height */
+    height: 180px;
     background-color: #1e293b;
     margin-bottom: 6px;
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    touch-action: auto; /* Allows Leaflet touch pan & zoom */
+    touch-action: auto;
 }
 
-#guess-map-container.small-mode #map {
-    height: 100px;
+/* FIXED BOTTOM MAP TOGGLE BUTTON */
+#fixed-map-toggle-btn {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 24px);
+    max-width: 336px;
+    height: 38px;
+    min-height: 38px;
+    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    color: #000;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    border: none;
+    border-radius: 10px;
+    z-index: 1500;
+    box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-#guess-map-container.medium-mode #map {
-    height: 160px;
-}
-
-#guess-map-container.big-mode #map {
-    height: 320px;
-}
-
-#size-btn { 
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    margin-bottom: 6px; 
-    color: #e2e8f0;
-}
-
-#size-btn:hover { 
-    background: rgba(255, 255, 255, 0.15); 
+#fixed-map-toggle-btn:active {
+    transform: translateX(-50%) scale(0.97);
 }
 
 #guess-btn { 

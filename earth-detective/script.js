@@ -17,6 +17,9 @@ let maxTimerSetting = 30;
 let maxHpSetting = 10000;
 let isAudioUnlocked = false;
 
+// Map state
+let isMapOpen = true;
+
 // UI Screens
 const screens = {
     menu: document.getElementById('main-menu'),
@@ -61,7 +64,6 @@ function unlockAllAudio() {
         }
     });
 
-    // Pre-prime extra dynamic tracks
     bgmTracks.concat(winTracks).forEach(filename => {
         const temp = new Audio(filename);
         temp.volume = 0.01;
@@ -106,7 +108,7 @@ function playRandomWin() {
     audio.win.play().catch(err => console.log("Win sound error: ", err));
 }
 
-// High-quality fallback locations if Wikidata or external image hotlinking fails
+// Fallback locations
 const fallbackLocations = [
     { pic: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000&auto=format&fit=crop", lat: 37.8651, lng: -119.5383 },
     { pic: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=1000&auto=format&fit=crop", lat: 48.8584, lng: 2.2945 },
@@ -114,7 +116,6 @@ const fallbackLocations = [
     { pic: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1000&auto=format&fit=crop", lat: 25.1972, lng: 55.2744 }
 ];
 
-// Fallback image handler for CORB / 404 image load errors
 const locationPhoto = document.getElementById('location-photo');
 locationPhoto.onerror = function() {
     console.warn("External photo failed to load. Using fallback location.");
@@ -124,7 +125,6 @@ locationPhoto.onerror = function() {
     targetLng = backup.lng;
 };
 
-// --- CUSTOM IN-GAME ALERT HELPER ---
 function customAlert(message) {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-modal');
@@ -156,9 +156,9 @@ const langData = {
         mapReady: "I'm Ready", 
         guess: "Make Guess", 
         dragText: "Move Map",
-        sizeSmall: "🔍 Medium", 
-        sizeMedium: "🔍 Expand", 
-        sizeBig: "🔽 Shrink" 
+        mapOpen: "🗺️ Open Map",
+        mapClose: "🗺️ Close Map",
+        mapCloseHeader: "✖ Close"
     },
     id: { 
         title: "Detektif Bumi: Bertahan Hidup", 
@@ -170,9 +170,9 @@ const langData = {
         mapReady: "Saya Siap", 
         guess: "Tebak Lokasi", 
         dragText: "Pindah Peta",
-        sizeSmall: "🔍 Sedang", 
-        sizeMedium: "🔍 Perbesar", 
-        sizeBig: "🔽 Perkecil" 
+        mapOpen: "🗺️ Buka Peta",
+        mapClose: "🗺️ Tutup Peta",
+        mapCloseHeader: "✖ Tutup"
     }
 };
 
@@ -190,21 +190,20 @@ document.getElementById('language-select').addEventListener('change', function(e
     const dragText = document.getElementById('drag-text');
     if (dragText) dragText.innerText = lang.dragText;
     
-    updateSizeButtonLabel();
+    updateMapToggleButtonLabel();
 });
 
-function updateSizeButtonLabel() {
+function updateMapToggleButtonLabel() {
     const currentLang = document.getElementById('language-select').value;
     const lang = langData[currentLang] || langData.en;
-    const sizeBtn = document.getElementById('size-btn');
-    if (!sizeBtn) return;
-
-    if (currentSizeMode === 'small') {
-        sizeBtn.innerText = lang.sizeSmall;
-    } else if (currentSizeMode === 'big') {
-        sizeBtn.innerText = lang.sizeBig;
-    } else {
-        sizeBtn.innerText = lang.sizeMedium;
+    const fixedBtn = document.getElementById('fixed-map-toggle-btn');
+    const closeHeaderBtn = document.getElementById('close-map-btn');
+    
+    if (fixedBtn) {
+        fixedBtn.innerText = isMapOpen ? lang.mapClose : lang.mapOpen;
+    }
+    if (closeHeaderBtn) {
+        closeHeaderBtn.innerText = lang.mapCloseHeader;
     }
 }
 
@@ -265,19 +264,19 @@ async function loadNewRound() {
     targetLat = parseFloat(coords[1]);
 }
 
-// --- 4. DRAGGABLE & RESIZABLE MAP CONTAINER ---
+// --- 4. DRAGGABLE & TOGGLEABLE MAP CONTAINER ---
 const mapContainer = document.getElementById('guess-map-container');
 const mapHeader = document.getElementById('map-header');
 const gameContainer = document.getElementById('game-container');
-const sizeBtn = document.getElementById('size-btn');
+const fixedMapToggleBtn = document.getElementById('fixed-map-toggle-btn');
+const closeMapBtn = document.getElementById('close-map-btn');
 
 let isDragging = false;
 let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
-let currentSizeMode = 'medium'; 
 
 if (mapHeader) {
     mapHeader.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('#size-btn')) return;
+        if (e.target.closest('#close-map-btn')) return;
         
         isDragging = true;
         mapHeader.setPointerCapture(e.pointerId);
@@ -330,31 +329,28 @@ if (mapHeader) {
     mapHeader.addEventListener('pointercancel', stopDrag);
 }
 
-if (sizeBtn) {
-    sizeBtn.addEventListener('click', function() {
-        mapContainer.classList.remove('small-mode', 'medium-mode', 'big-mode');
-        
-        if (currentSizeMode === 'medium') {
-            currentSizeMode = 'big';
-            mapContainer.classList.add('big-mode');
-        } else if (currentSizeMode === 'big') {
-            currentSizeMode = 'small';
-            mapContainer.classList.add('small-mode');
-        } else {
-            currentSizeMode = 'medium';
-            mapContainer.classList.add('medium-mode');
-        }
-        
-        updateSizeButtonLabel();
-        
-        const gameRect = gameContainer.getBoundingClientRect();
-        const containerRect = mapContainer.getBoundingClientRect();
-        if (containerRect.top + containerRect.height > gameRect.height) {
-            mapContainer.style.top = `${Math.max(0, gameRect.height - containerRect.height - 10)}px`;
-        }
-        
-        setTimeout(() => map.invalidateSize(), 200);
-    });
+function toggleMap(show) {
+    if (typeof show === 'boolean') {
+        isMapOpen = show;
+    } else {
+        isMapOpen = !isMapOpen;
+    }
+
+    if (isMapOpen) {
+        mapContainer.classList.remove('map-hidden');
+        setTimeout(() => map.invalidateSize(), 150);
+    } else {
+        mapContainer.classList.add('map-hidden');
+    }
+    updateMapToggleButtonLabel();
+}
+
+if (fixedMapToggleBtn) {
+    fixedMapToggleBtn.addEventListener('click', () => toggleMap());
+}
+
+if (closeMapBtn) {
+    closeMapBtn.addEventListener('click', () => toggleMap(false));
 }
 
 // --- 5. MENU & AUDIO CONTROLS ---
@@ -511,6 +507,7 @@ document.getElementById('begin-turn-btn').addEventListener('click', function() {
     screens.game.style.display = 'block';
     
     refreshArenaUIDashboard(); 
+    toggleMap(true);
     setTimeout(() => {
         map.invalidateSize();
         startRoundClockCountdown(); 
