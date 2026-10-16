@@ -378,10 +378,10 @@ button:active {
     to { transform: scale(1.08); }
 }
 
-/* --- GUESS MAP CONTAINER (DRAGGABLE & TOGGLEABLE) --- */
+/* --- GUESS MAP CONTAINER (TOGGLEABLE, FIXED POSITION) --- */
 #guess-map-container {
     position: absolute;
-    bottom: 58px;
+    bottom: 56px;
     left: 12px;
     width: calc(100% - 24px);
     background: rgba(15, 23, 42, 0.92);
@@ -391,53 +391,32 @@ button:active {
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     box-shadow: 0 15px 35px rgba(0,0,0,0.7), 0 0 20px rgba(0, 0, 0, 0.4);
-    transition: opacity 0.2s ease, transform 0.2s ease;
     z-index: 1000;
-    touch-action: none;
 }
 
 #guess-map-container.map-hidden {
     display: none !important;
 }
 
-/* Header Drag Handle Bar */
+/* Map Header Bar */
 #map-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
     margin-bottom: 6px;
-    cursor: grab;
-    user-select: none;
-    -webkit-user-select: none;
-    background: rgba(255, 255, 255, 0.06);
     padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 8px;
-    border: 1px dashed rgba(0, 242, 254, 0.3);
-    touch-action: none;
+    border: 1px solid rgba(0, 242, 254, 0.2);
 }
 
-#map-header:active {
-    cursor: grabbing;
-    background: rgba(0, 242, 254, 0.15);
-}
-
-#drag-handle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+#map-header-title {
     font-family: 'Rajdhani', sans-serif;
     font-size: 12px;
     font-weight: 700;
     color: #00f2fe;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    pointer-events: none;
-}
-
-.drag-dots {
-    font-size: 14px;
-    color: #94a3b8;
 }
 
 #close-map-btn { 
@@ -446,7 +425,7 @@ button:active {
     color: #e2e8f0;
     font-size: 11px;
     padding: 4px 10px;
-    min-height: 28px;
+    min-height: 26px;
     border-radius: 6px;
     width: auto;
     margin-bottom: 0;
@@ -470,33 +449,35 @@ button:active {
     touch-action: auto;
 }
 
-/* FIXED BOTTOM MAP TOGGLE BUTTON */
+/* COMPACT CENTERED BOTTOM MAP TOGGLE BUTTON */
 #fixed-map-toggle-btn {
     position: absolute;
     bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
-    width: calc(100% - 24px);
-    max-width: 336px;
-    height: 38px;
-    min-height: 38px;
+    width: auto;
+    min-width: 130px;
+    height: 36px;
+    min-height: 36px;
+    padding: 6px 16px;
     background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
     color: #000;
     font-family: 'Orbitron', sans-serif;
     font-weight: 800;
-    font-size: 13px;
+    font-size: 12px;
     border: none;
-    border-radius: 10px;
+    border-radius: 20px;
     z-index: 1500;
     box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
 }
 
 #fixed-map-toggle-btn:active {
-    transform: translateX(-50%) scale(0.97);
+    transform: translateX(-50%) scale(0.96);
 }
 
 #guess-btn { 
