@@ -378,7 +378,7 @@ button:active {
     to { transform: scale(1.08); }
 }
 
-/* --- GUESS MAP CONTAINER (TOGGLEABLE, FIXED POSITION) --- */
+/* --- GUESS MAP CONTAINER (TOGGLEABLE & EXPANDABLE) --- */
 #guess-map-container {
     position: absolute;
     bottom: 56px;
@@ -392,6 +392,7 @@ button:active {
     border: 1px solid rgba(255, 255, 255, 0.15);
     box-shadow: 0 15px 35px rgba(0,0,0,0.7), 0 0 20px rgba(0, 0, 0, 0.4);
     z-index: 1000;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 #guess-map-container.map-hidden {
@@ -403,6 +404,7 @@ button:active {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
     margin-bottom: 6px;
     padding: 4px 8px;
     background: rgba(255, 255, 255, 0.06);
@@ -410,13 +412,22 @@ button:active {
     border: 1px solid rgba(0, 242, 254, 0.2);
 }
 
-#map-header-title {
-    font-family: 'Rajdhani', sans-serif;
-    font-size: 12px;
-    font-weight: 700;
+#expand-map-btn {
+    background: rgba(0, 242, 254, 0.15);
+    border: 1px solid rgba(0, 242, 254, 0.4);
     color: #00f2fe;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    padding: 4px 10px;
+    min-height: 26px;
+    border-radius: 6px;
+    width: auto;
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+#expand-map-btn:hover {
+    background: rgba(0, 242, 254, 0.3);
+    color: #ffffff;
 }
 
 #close-map-btn { 
@@ -447,6 +458,12 @@ button:active {
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
     touch-action: auto;
+    transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Expanded Map Mode */
+#guess-map-container.expanded #map {
+    height: 340px;
 }
 
 /* COMPACT CENTERED BOTTOM MAP TOGGLE BUTTON */

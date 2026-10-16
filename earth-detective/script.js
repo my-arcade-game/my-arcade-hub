@@ -20,6 +20,7 @@ let isAudioUnlocked = false;
 
 // Map state
 let isMapOpen = true;
+let isMapExpanded = false;
 
 // UI Screens
 const screens = {
@@ -120,37 +121,37 @@ function shuffleArray(array) {
 
 // 35+ Diverse Global Locations (Fallback Pool)
 const fallbackLocations = [
-    { pic: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000&auto=format&fit=crop", lat: 37.8651, lng: -119.5383 }, // Yosemite, USA
-    { pic: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=1000&auto=format&fit=crop", lat: 48.8584, lng: 2.2945 }, // Eiffel Tower, France
-    { pic: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1000&auto=format&fit=crop", lat: 46.0207, lng: 14.4822 }, // Lake Bled, Slovenia
-    { pic: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1000&auto=format&fit=crop", lat: 25.1972, lng: 55.2744 }, // Burj Khalifa, Dubai
-    { pic: "https://images.unsplash.com/photo-1526392060635-9d6019884377?w=1000&auto=format&fit=crop", lat: -13.1631, lng: -72.5450 }, // Machu Picchu, Peru
-    { pic: "https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=1000&auto=format&fit=crop", lat: 13.7563, lng: 100.5018 }, // Bangkok, Thailand
-    { pic: "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=1000&auto=format&fit=crop", lat: 44.1068, lng: 9.7289 }, // Cinque Terre, Italy
-    { pic: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=1000&auto=format&fit=crop", lat: 35.6762, lng: 139.6503 }, // Tokyo, Japan
-    { pic: "https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=1000&auto=format&fit=crop", lat: 45.4408, lng: 12.3155 }, // Venice, Italy
-    { pic: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=1000&auto=format&fit=crop", lat: 36.3932, lng: 25.4615 }, // Santorini, Greece
-    { pic: "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=1000&auto=format&fit=crop", lat: 27.1751, lng: 78.0421 }, // Taj Mahal, India
-    { pic: "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=1000&auto=format&fit=crop", lat: -33.8568, lng: 151.2153 }, // Sydney Opera House, Australia
-    { pic: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1000&auto=format&fit=crop", lat: 51.5007, lng: -0.1246 }, // Big Ben, London
-    { pic: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1000&auto=format&fit=crop", lat: -22.9519, lng: -43.2105 }, // Christ the Redeemer, Brazil
-    { pic: "https://images.unsplash.com/photo-1503177119275-0aa32b3a9368?w=1000&auto=format&fit=crop", lat: 29.9792, lng: 31.1342 }, // Pyramids of Giza, Egypt
-    { pic: "https://images.unsplash.com/photo-1548625361-18237e19b6e5?w=1000&auto=format&fit=crop", lat: 40.6892, lng: -74.0445 }, // Statue of Liberty, USA
-    { pic: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1000&auto=format&fit=crop", lat: 51.1789, lng: -1.8262 }, // Stonehenge, UK
-    { pic: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1000&auto=format&fit=crop", lat: -8.3405, lng: 115.0920 }, // Bali, Indonesia
-    { pic: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=1000&auto=format&fit=crop", lat: 40.4319, lng: 116.5704 }, // Great Wall of China
-    { pic: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=1000&auto=format&fit=crop", lat: 41.8902, lng: 12.4922 }, // Colosseum, Rome
-    { pic: "https://images.unsplash.com/photo-1512100356356-de1b84283e18?w=1000&auto=format&fit=crop", lat: 30.3285, lng: 35.4444 }, // Petra, Jordan
-    { pic: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1000&auto=format&fit=crop", lat: 27.9881, lng: 86.9250 }, // Mount Everest, Nepal
-    { pic: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000&auto=format&fit=crop", lat: -16.5004, lng: -151.7415 }, // Bora Bora, French Polynesia
-    { pic: "https://images.unsplash.com/photo-1533105079780-92b9be482077?w=1000&auto=format&fit=crop", lat: 37.9715, lng: 23.7267 }, // Acropolis, Athens
-    { pic: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1000&auto=format&fit=crop", lat: 64.1466, lng: -21.9426 }, // Reykjavik, Iceland
-    { pic: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=1000&auto=format&fit=crop", lat: 37.8199, lng: -122.4783 }, // Golden Gate Bridge, USA
-    { pic: "https://images.unsplash.com/photo-1528164344705-47542687990d?w=1000&auto=format&fit=crop", lat: 35.3606, lng: 138.7274 }, // Mount Fuji, Japan
-    { pic: "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=1000&auto=format&fit=crop", lat: 3.1390, lng: 101.6869 }, // Petronas Towers, Malaysia
-    { pic: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=1000&auto=format&fit=crop", lat: 15.2993, lng: 74.1240 }, // Goa, India
-    { pic: "https://images.unsplash.com/photo-1539650116574-8efeb43e2750?w=1000&auto=format&fit=crop", lat: 24.6877, lng: 46.7219 }, // Riyadh, Saudi Arabia
-    { pic: "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1000&auto=format&fit=crop", lat: -1.2921, lng: 36.8219 }  // Nairobi, Kenya
+    { pic: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000&auto=format&fit=crop", lat: 37.8651, lng: -119.5383 },
+    { pic: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=1000&auto=format&fit=crop", lat: 48.8584, lng: 2.2945 },
+    { pic: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1000&auto=format&fit=crop", lat: 46.0207, lng: 14.4822 },
+    { pic: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1000&auto=format&fit=crop", lat: 25.1972, lng: 55.2744 },
+    { pic: "https://images.unsplash.com/photo-1526392060635-9d6019884377?w=1000&auto=format&fit=crop", lat: -13.1631, lng: -72.5450 },
+    { pic: "https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=1000&auto=format&fit=crop", lat: 13.7563, lng: 100.5018 },
+    { pic: "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?w=1000&auto=format&fit=crop", lat: 44.1068, lng: 9.7289 },
+    { pic: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?w=1000&auto=format&fit=crop", lat: 35.6762, lng: 139.6503 },
+    { pic: "https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=1000&auto=format&fit=crop", lat: 45.4408, lng: 12.3155 },
+    { pic: "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=1000&auto=format&fit=crop", lat: 36.3932, lng: 25.4615 },
+    { pic: "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=1000&auto=format&fit=crop", lat: 27.1751, lng: 78.0421 },
+    { pic: "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=1000&auto=format&fit=crop", lat: -33.8568, lng: 151.2153 },
+    { pic: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1000&auto=format&fit=crop", lat: 51.5007, lng: -0.1246 },
+    { pic: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1000&auto=format&fit=crop", lat: -22.9519, lng: -43.2105 },
+    { pic: "https://images.unsplash.com/photo-1503177119275-0aa32b3a9368?w=1000&auto=format&fit=crop", lat: 29.9792, lng: 31.1342 },
+    { pic: "https://images.unsplash.com/photo-1548625361-18237e19b6e5?w=1000&auto=format&fit=crop", lat: 40.6892, lng: -74.0445 },
+    { pic: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1000&auto=format&fit=crop", lat: 51.1789, lng: -1.8262 },
+    { pic: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1000&auto=format&fit=crop", lat: -8.3405, lng: 115.0920 },
+    { pic: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=1000&auto=format&fit=crop", lat: 40.4319, lng: 116.5704 },
+    { pic: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=1000&auto=format&fit=crop", lat: 41.8902, lng: 12.4922 },
+    { pic: "https://images.unsplash.com/photo-1512100356356-de1b84283e18?w=1000&auto=format&fit=crop", lat: 30.3285, lng: 35.4444 },
+    { pic: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1000&auto=format&fit=crop", lat: 27.9881, lng: 86.9250 },
+    { pic: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000&auto=format&fit=crop", lat: -16.5004, lng: -151.7415 },
+    { pic: "https://images.unsplash.com/photo-1533105079780-92b9be482077?w=1000&auto=format&fit=crop", lat: 37.9715, lng: 23.7267 },
+    { pic: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1000&auto=format&fit=crop", lat: 64.1466, lng: -21.9426 },
+    { pic: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=1000&auto=format&fit=crop", lat: 37.8199, lng: -122.4783 },
+    { pic: "https://images.unsplash.com/photo-1528164344705-47542687990d?w=1000&auto=format&fit=crop", lat: 35.3606, lng: 138.7274 },
+    { pic: "https://images.unsplash.com/photo-1568084680786-a84f91d1153c?w=1000&auto=format&fit=crop", lat: 3.1390, lng: 101.6869 },
+    { pic: "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=1000&auto=format&fit=crop", lat: 15.2993, lng: 74.1240 },
+    { pic: "https://images.unsplash.com/photo-1539650116574-8efeb43e2750?w=1000&auto=format&fit=crop", lat: 24.6877, lng: 46.7219 },
+    { pic: "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=1000&auto=format&fit=crop", lat: -1.2921, lng: 36.8219 }
 ];
 
 const locationPhoto = document.getElementById('location-photo');
@@ -189,7 +190,8 @@ const langData = {
         start: "Start Game", 
         mapReady: "I'm Ready", 
         guess: "Make Guess", 
-        headerTitle: "📍 SELECT LOCATION",
+        expandMap: "🔍 Expand",
+        shrinkMap: "🔽 Shrink",
         mapOpen: "🗺️ Open Map",
         mapClose: "🗺️ Close Map",
         mapCloseHeader: "✖ Close"
@@ -203,7 +205,8 @@ const langData = {
         start: "Mulai Permainan", 
         mapReady: "Saya Siap", 
         guess: "Tebak Lokasi", 
-        headerTitle: "📍 PILIH LOKASI",
+        expandMap: "🔍 Perbesar",
+        shrinkMap: "🔽 Perkecil",
         mapOpen: "🗺️ Buka Peta",
         mapClose: "🗺️ Tutup Peta",
         mapCloseHeader: "✖ Tutup"
@@ -221,10 +224,8 @@ document.getElementById('language-select').addEventListener('change', function(e
     document.getElementById('begin-turn-btn').innerText = lang.mapReady;
     document.getElementById('guess-btn').innerText = lang.guess;
     
-    const headerTitle = document.getElementById('map-header-title');
-    if (headerTitle) headerTitle.innerText = lang.headerTitle;
-    
     updateMapToggleButtonLabel();
+    updateExpandButtonLabel();
 });
 
 function updateMapToggleButtonLabel() {
@@ -241,6 +242,16 @@ function updateMapToggleButtonLabel() {
     }
 }
 
+function updateExpandButtonLabel() {
+    const currentLang = document.getElementById('language-select').value;
+    const lang = langData[currentLang] || langData.en;
+    const expandBtn = document.getElementById('expand-map-btn');
+    
+    if (expandBtn) {
+        expandBtn.innerText = isMapExpanded ? lang.shrinkMap : lang.expandMap;
+    }
+}
+
 // --- 3. LEAFLET MAP & ENHANCED WIKIPEDIA API ---
 const map = L.map('map').setView([20, 0], 2);
 
@@ -254,7 +265,6 @@ map.on('click', function(e) {
     userMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
 });
 
-// SPARQL Query fetching Tourist Attractions, World Heritage Sites, National Parks & Castles
 const WIKIDATA_URL = `https://query.wikidata.org/sparql?query=` + encodeURIComponent(`
     SELECT DISTINCT ?pic ?geo WHERE { 
       ?item wdt:P31 ?type;
@@ -275,7 +285,6 @@ async function fetchWikipediaLocations() {
                 if (imageUrl.startsWith('http://')) imageUrl = imageUrl.replace('http://', 'https://');
                 return { pic: imageUrl, lat: parseFloat(coords[1]), lng: parseFloat(coords[0]) };
             });
-            // Combine API results with fallbacks and shuffle
             locationsList = shuffleArray([...apiItems, ...fallbackLocations]);
         } else {
             locationsList = shuffleArray([...fallbackLocations]);
@@ -289,11 +298,9 @@ fetchWikipediaLocations();
 
 async function loadNewRound() {
     if (locationsList.length === 0) {
-        // Reset pool if all images are exhausted
         locationsList = shuffleArray([...fallbackLocations]);
     }
     
-    // Pick the next unplayed location
     const currentLocation = locationsList.pop();
     usedLocations.push(currentLocation);
 
@@ -302,10 +309,11 @@ async function loadNewRound() {
     targetLng = currentLocation.lng;
 }
 
-// --- 4. TOGGLEABLE MAP CONTROLLER ---
+// --- 4. TOGGLEABLE & EXPANDABLE MAP CONTROLLER ---
 const mapContainer = document.getElementById('guess-map-container');
 const fixedMapToggleBtn = document.getElementById('fixed-map-toggle-btn');
 const closeMapBtn = document.getElementById('close-map-btn');
+const expandMapBtn = document.getElementById('expand-map-btn');
 
 function toggleMap(show) {
     if (typeof show === 'boolean') {
@@ -323,12 +331,27 @@ function toggleMap(show) {
     updateMapToggleButtonLabel();
 }
 
+function toggleMapExpand() {
+    isMapExpanded = !isMapExpanded;
+    if (isMapExpanded) {
+        mapContainer.classList.add('expanded');
+    } else {
+        mapContainer.classList.remove('expanded');
+    }
+    updateExpandButtonLabel();
+    setTimeout(() => map.invalidateSize(), 200);
+}
+
 if (fixedMapToggleBtn) {
     fixedMapToggleBtn.addEventListener('click', () => toggleMap());
 }
 
 if (closeMapBtn) {
     closeMapBtn.addEventListener('click', () => toggleMap(false));
+}
+
+if (expandMapBtn) {
+    expandMapBtn.addEventListener('click', () => toggleMapExpand());
 }
 
 // --- 5. MENU & AUDIO CONTROLS ---
