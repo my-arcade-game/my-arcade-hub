@@ -53,7 +53,7 @@
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
-      gap: 10px;
+      gap: 12px;
       padding: 16px 14px;
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
@@ -106,7 +106,7 @@
       width: 100%;
       margin: 4px 0;
       flex: 1;
-      max-height: 310px;
+      max-height: 330px;
       overflow-y: auto;
       overflow-x: hidden;
       padding-right: 4px;
@@ -139,42 +139,6 @@
     .game-list::-webkit-scrollbar-thumb:hover,
     #hub-container::-webkit-scrollbar-thumb:hover {
       background: #ffe600;
-    }
-
-    /* CAPSULE SCROLL HINT BADGE */
-    .scroll-capsule {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 4px 14px;
-      border-radius: 20px;
-      background: rgba(255, 230, 0, 0.12);
-      border: 1px solid rgba(255, 230, 0, 0.5);
-      color: #ffe600;
-      font-size: 10px;
-      font-weight: bold;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      box-shadow: 0 0 10px rgba(255, 230, 0, 0.2);
-      margin: 2px 0;
-      animation: capsulePulse 1.5s infinite alternate;
-      flex-shrink: 0;
-    }
-
-    .capsule-arrow {
-      font-size: 12px;
-      animation: bounceArrow 1s infinite alternate;
-    }
-
-    @keyframes capsulePulse {
-      0% { border-color: rgba(255, 230, 0, 0.4); box-shadow: 0 0 5px rgba(255, 230, 0, 0.2); }
-      100% { border-color: rgba(255, 230, 0, 0.9); box-shadow: 0 0 12px rgba(255, 230, 0, 0.6); }
-    }
-
-    @keyframes bounceArrow {
-      0% { transform: translateY(-2px); }
-      100% { transform: translateY(2px); }
     }
 
     .game-card {
@@ -335,14 +299,6 @@
       </div>
       <div class="play-btn">PLAY</div>
     </a>
-  </div>
-
-  <!-- CAPSULE SCROLL HINT BADGE -->
-  <div style="text-align: center; width: 100%;">
-    <div class="scroll-capsule">
-      <span>MORE GAMES BELOW</span>
-      <span class="capsule-arrow">↓</span>
-    </div>
   </div>
 
   <!-- FOOTER & SOCIALS -->
