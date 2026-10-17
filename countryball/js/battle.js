@@ -443,9 +443,9 @@ var BattleSystem = (() => {
     const color = matchSec >= 60 ? `hsl(${Date.now() * 0.5 % 360}, 100%, 50%)` : `hsl(${rgbHue}, 100%, 50%)`;
 
     ctx.save();
-    ctx.lineWidth = matchSec >= 60 ? 8 : 6;
+    ctx.lineWidth = matchSec >= 60 ? 6 : 4;
     ctx.strokeStyle = color;
-    ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
+    ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
     ctx.restore();
   }
 
@@ -1422,9 +1422,10 @@ var BattleSystem = (() => {
     ghosts = [];
     spiritDaggers = [];
 
+    // Perfectly balanced spawn relative to vertical playable field
     balls = [
-      new Ball(p1Data, canvas.width * 0.3, canvas.height * 0.5, true),
-      new Ball(p2Data, canvas.width * 0.7, canvas.height * 0.5, false)
+      new Ball(p1Data, canvas.width * 0.28, canvas.height * 0.53, true),
+      new Ball(p2Data, canvas.width * 0.72, canvas.height * 0.53, false)
     ];
     items = [];
     airstrikes = [];
@@ -1629,16 +1630,30 @@ var BattleSystem = (() => {
     const [b1, b2] = balls;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(10, 12, 20, 0.85)';
+    ctx.fillStyle = 'rgba(10, 12, 20, 0.88)';
     ctx.fillRect(0, 0, canvas.width, 54);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.fillRect(0, 53, canvas.width, 1);
 
-    drawBar(12, 26, 145, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, true, b1.lives);
-    drawBar(203, 26, 145, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, false, b2.lives);
+    // Symmetric P1 and P2 HUD bars (P1: x=10..145, P2: x=215..350)
+    drawBar(10, 26, 135, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, true, b1.lives);
+    drawBar(215, 26, 135, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, false, b2.lives);
 
+    // Center Timer Badge
     const matchSec = Math.floor(matchTimer / 60);
-    ctx.font = 'bold 12px Courier New';
+    ctx.fillStyle = '#121420';
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(canvas.width / 2 - 22, 16, 44, 22, 6);
+      ctx.fill();
+    } else {
+      ctx.fillRect(canvas.width / 2 - 22, 16, 44, 22);
+    }
+    ctx.strokeStyle = matchSec >= 60 ? '#ff0055' : '#00f0ff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.font = 'bold 12px Courier New, monospace';
     ctx.fillStyle = matchSec >= 60 ? '#ff0055' : '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1648,19 +1663,23 @@ var BattleSystem = (() => {
   }
 
   function drawBar(x, y, w, h, hp, maxHp, color, name, isLeft, lives = 2) {
-    ctx.font = 'bold 12px Courier New';
+    ctx.font = 'bold 11px Courier New, monospace';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
 
     let hearts = '';
     for (let i = 0; i < lives; i++) hearts += '❤️';
 
+    const displayName = `${name} ${hearts}`.trim();
+    const displayNameRight = `${hearts} ${name}`.trim();
+
+    // Constrain name text width to prevent P2 cropping
     if (isLeft) {
       ctx.textAlign = 'left';
-      ctx.fillText(`${name} ${hearts}`, x, y - 4);
+      ctx.fillText(displayName, x, y - 3, w);
     } else {
       ctx.textAlign = 'right';
-      ctx.fillText(`${hearts} ${name}`, x + w, y - 4);
+      ctx.fillText(displayNameRight, x + w, y - 3, w);
     }
 
     ctx.fillStyle = '#111625';
@@ -1675,7 +1694,7 @@ var BattleSystem = (() => {
     ctx.strokeRect(x, y, w, h);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 10px Courier New';
+    ctx.font = 'bold 10px Courier New, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2 + 1);

@@ -46,18 +46,24 @@
       background: #121420;
       border: 4px solid #ff0055;
       border-radius: 12px;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
       animation: rgbGlow 6s linear infinite;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      padding: 20px 14px;
+      justify-content: flex-start;
+      gap: 12px;
+      padding: 20px 14px 16px 14px;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      scrollbar-width: thin;
+      scrollbar-color: #ff0055 #0d0f18;
     }
 
     /* HEADER */
     .header {
       text-align: center;
-      margin-top: 10px;
+      margin-top: 4px;
       flex-shrink: 0;
     }
 
@@ -95,32 +101,61 @@
     .game-list {
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
       width: 100%;
-      margin: 14px 0;
+      margin: 4px 0;
       flex: 1;
+      max-height: 320px;
       overflow-y: auto;
+      overflow-x: hidden;
       padding-right: 4px;
       -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      scrollbar-width: thin;
+      scrollbar-color: #ff0055 #0d0f18;
+      flex-shrink: 0;
     }
 
     /* Custom Arcade Scrollbar */
-    .game-list::-webkit-scrollbar {
+    .game-list::-webkit-scrollbar,
+    #hub-container::-webkit-scrollbar {
       width: 6px;
     }
 
-    .game-list::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 3px;
+    .game-list::-webkit-scrollbar-track,
+    #hub-container::-webkit-scrollbar-track {
+      background: #0d0f18;
+      border-radius: 4px;
     }
 
-    .game-list::-webkit-scrollbar-thumb {
-      background: #353b5e;
-      border-radius: 3px;
+    .game-list::-webkit-scrollbar-thumb,
+    #hub-container::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #ff0055 0%, #00f0ff 100%);
+      border-radius: 4px;
+      box-shadow: 0 0 8px #ff0055;
     }
 
-    .game-list::-webkit-scrollbar-thumb:hover {
-      background: #ff0055;
+    .game-list::-webkit-scrollbar-thumb:hover,
+    #hub-container::-webkit-scrollbar-thumb:hover {
+      background: #ffe600;
+    }
+
+    /* SCROLL HINT ANIMATION */
+    .scroll-down-hint {
+      font-size: 11px;
+      font-weight: bold;
+      color: #ffe600;
+      text-shadow: 1px 1px #ff0055;
+      margin: 2px 0;
+      text-align: center;
+      animation: bounceDown 1.2s infinite;
+      letter-spacing: 1px;
+      flex-shrink: 0;
+    }
+
+    @keyframes bounceDown {
+      0%, 100% { transform: translateY(0); opacity: 0.7; }
+      50% { transform: translateY(4px); opacity: 1; }
     }
 
     .game-card {
@@ -136,6 +171,7 @@
       transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       cursor: pointer;
       flex-shrink: 0;
+      touch-action: pan-y;
     }
 
     .game-card:active {
@@ -213,7 +249,8 @@
     /* FOOTER */
     .footer {
       text-align: center;
-      margin-bottom: 8px;
+      margin-top: auto;
+      margin-bottom: 4px;
       flex-shrink: 0;
     }
 
@@ -280,6 +317,9 @@
       <div class="play-btn">PLAY</div>
     </a>
   </div>
+
+  <!-- SCROLL HINT INDICATOR -->
+  <div class="scroll-down-hint">▼ SCROLL FOR MORE GAMES ▼</div>
 
   <!-- FOOTER & SOCIALS -->
   <div class="footer">
