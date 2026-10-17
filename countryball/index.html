@@ -16,7 +16,7 @@
 
     html, body {
       width: 100vw;
-      height: 100vh;
+      height: 100dvh;
       background: #08090f;
       color: #fff;
       font-family: 'Courier New', Courier, monospace;
@@ -36,10 +36,11 @@
       100% { border-color: #ff0055; box-shadow: 0 0 30px rgba(255, 0, 85, 0.6); }
     }
 
+    /* Responsive Mobile Scaling Fix (Prevents Cropping on Phones) */
     #game-container {
       position: relative;
-      width: min(360px, 100vw);
-      height: min(640px, 100vh);
+      width: min(360px, 100vw, calc(100dvh * (9 / 16)));
+      height: min(640px, 100dvh, calc(100vw * (16 / 9)));
       aspect-ratio: 9 / 16;
       background: #121420;
       border: 4px solid #ff0055;
@@ -82,8 +83,8 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      gap: 8px;
-      padding: 16px 10px 24px 10px;
+      gap: 6px;
+      padding: 14px 10px 20px 10px;
       background: rgba(18, 20, 32, 0.95);
       z-index: 10;
       overflow-y: auto;
@@ -191,7 +192,7 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       width: 100%;
-      max-height: 280px;
+      max-height: 270px;
       overflow-y: auto;
       overflow-x: hidden;
       padding-right: 4px;
@@ -203,22 +204,40 @@
       flex-shrink: 0;
     }
 
-    /* SCROLL DOWN HINT OUTSIDE FLAG SELECT */
-    .scroll-down-hint {
-      font-size: 11px;
-      font-weight: bold;
+    /* CAPSULE SCROLL HINT BADGE */
+    .scroll-capsule {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      background: rgba(255, 230, 0, 0.12);
+      border: 1px solid rgba(255, 230, 0, 0.5);
       color: #ffe600;
-      text-shadow: 1px 1px #ff0055;
-      margin: 4px 0;
-      text-align: center;
-      animation: bounceDown 1.2s infinite;
+      font-size: 10px;
+      font-weight: bold;
       letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 0 10px rgba(255, 230, 0, 0.2);
+      margin: 4px 0;
+      animation: capsulePulse 1.5s infinite alternate;
       flex-shrink: 0;
     }
 
-    @keyframes bounceDown {
-      0%, 100% { transform: translateY(0); opacity: 0.7; }
-      50% { transform: translateY(4px); opacity: 1; }
+    .capsule-arrow {
+      font-size: 12px;
+      animation: bounceArrow 1s infinite alternate;
+    }
+
+    @keyframes capsulePulse {
+      0% { border-color: rgba(255, 230, 0, 0.4); box-shadow: 0 0 5px rgba(255, 230, 0, 0.2); }
+      100% { border-color: rgba(255, 230, 0, 0.9); box-shadow: 0 0 12px rgba(255, 230, 0, 0.6); }
+    }
+
+    @keyframes bounceArrow {
+      0% { transform: translateY(-2px); }
+      100% { transform: translateY(2px); }
     }
 
     /* Webkit (Chrome, Edge, Safari) Scrollbar Styling */
@@ -522,8 +541,11 @@
     
     <div class="grid" id="country-grid"></div>
 
-    <!-- SCROLL DOWN INDICATOR OUTSIDE FLAG SELECT GRID -->
-    <div class="scroll-down-hint">▼ SCROLL DOWN TO START ▼</div>
+    <!-- CAPSULE SCROLL HINT BADGE -->
+    <div class="scroll-capsule">
+      <span>SCROLL DOWN</span>
+      <span class="capsule-arrow">↓</span>
+    </div>
 
     <button id="btn-fight" class="btn" style="opacity:0.4; pointer-events:none;">FIGHT!</button>
   </div>
