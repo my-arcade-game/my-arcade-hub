@@ -83,7 +83,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: flex-start;
-      gap: 6px;
+      gap: 8px;
       padding: 14px 10px 20px 10px;
       background: rgba(18, 20, 32, 0.95);
       z-index: 10;
@@ -192,7 +192,7 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       width: 100%;
-      max-height: 270px;
+      max-height: 280px;
       overflow-y: auto;
       overflow-x: hidden;
       padding-right: 4px;
@@ -202,42 +202,6 @@
       touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
       flex-shrink: 0;
-    }
-
-    /* CAPSULE SCROLL HINT BADGE */
-    .scroll-capsule {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      padding: 4px 14px;
-      border-radius: 20px;
-      background: rgba(255, 230, 0, 0.12);
-      border: 1px solid rgba(255, 230, 0, 0.5);
-      color: #ffe600;
-      font-size: 10px;
-      font-weight: bold;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      box-shadow: 0 0 10px rgba(255, 230, 0, 0.2);
-      margin: 4px 0;
-      animation: capsulePulse 1.5s infinite alternate;
-      flex-shrink: 0;
-    }
-
-    .capsule-arrow {
-      font-size: 12px;
-      animation: bounceArrow 1s infinite alternate;
-    }
-
-    @keyframes capsulePulse {
-      0% { border-color: rgba(255, 230, 0, 0.4); box-shadow: 0 0 5px rgba(255, 230, 0, 0.2); }
-      100% { border-color: rgba(255, 230, 0, 0.9); box-shadow: 0 0 12px rgba(255, 230, 0, 0.6); }
-    }
-
-    @keyframes bounceArrow {
-      0% { transform: translateY(-2px); }
-      100% { transform: translateY(2px); }
     }
 
     /* Webkit (Chrome, Edge, Safari) Scrollbar Styling */
@@ -341,7 +305,7 @@
       box-shadow: 0 4px 0 #990033;
       transition: all 0.1s;
       width: 85%;
-      margin: 4px 0 12px 0;
+      margin: 8px 0 16px 0;
       flex-shrink: 0;
     }
 
@@ -540,12 +504,6 @@
     </div>
     
     <div class="grid" id="country-grid"></div>
-
-    <!-- CAPSULE SCROLL HINT BADGE -->
-    <div class="scroll-capsule">
-      <span>SCROLL DOWN</span>
-      <span class="capsule-arrow">↓</span>
-    </div>
 
     <button id="btn-fight" class="btn" style="opacity:0.4; pointer-events:none;">FIGHT!</button>
   </div>
