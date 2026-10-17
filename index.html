@@ -58,6 +58,7 @@
     .header {
       text-align: center;
       margin-top: 10px;
+      flex-shrink: 0;
     }
 
     .badge {
@@ -90,13 +91,36 @@
       font-weight: bold;
     }
 
-    /* GAME LIST */
+    /* GAME LIST (SCROLLABLE) */
     .game-list {
       display: flex;
       flex-direction: column;
       gap: 14px;
       width: 100%;
-      margin: 10px 0;
+      margin: 14px 0;
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Custom Arcade Scrollbar */
+    .game-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .game-list::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
+
+    .game-list::-webkit-scrollbar-thumb {
+      background: #353b5e;
+      border-radius: 3px;
+    }
+
+    .game-list::-webkit-scrollbar-thumb:hover {
+      background: #ff0055;
     }
 
     .game-card {
@@ -111,6 +135,7 @@
       color: inherit;
       transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
       cursor: pointer;
+      flex-shrink: 0;
     }
 
     .game-card:active {
@@ -189,6 +214,7 @@
     .footer {
       text-align: center;
       margin-bottom: 8px;
+      flex-shrink: 0;
     }
 
     .social-links {
