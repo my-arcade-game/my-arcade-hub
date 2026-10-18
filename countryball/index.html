@@ -84,12 +84,10 @@
       align-items: center;
       justify-content: flex-start;
       gap: 8px;
-      padding: 14px 10px 20px 10px;
+      padding: 14px 10px 20px 10px; /* 20px bottom padding to keep button off edge */
       background: rgba(18, 20, 32, 0.95);
       z-index: 10;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
-      touch-action: pan-y;
+      overflow: hidden; /* Prevent screen scroll, grid will scroll instead */
     }
 
     #screen-start {
@@ -130,6 +128,7 @@
       margin-bottom: 4px;
       text-align: center;
       font-weight: 900;
+      flex-shrink: 0;
     }
 
     /* SELECTION DISPLAY VS BANNER */
@@ -192,16 +191,16 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       width: 100%;
-      max-height: 280px;
-      overflow-y: auto;
+      flex: 1 1 0%; /* Take up exactly the remaining vertical space */
+      min-height: 0; /* Prevent expanding beyond container */
+      margin: 4px 0 8px 0;
+      overflow-y: auto; /* Enable vertical scrolling */
       overflow-x: hidden;
       padding-right: 4px;
-      margin: 4px 0;
       scrollbar-width: thin;
       scrollbar-color: #ff0055 #0d0f18;
       touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
-      flex-shrink: 0;
     }
 
     /* Webkit (Chrome, Edge, Safari) Scrollbar Styling */
@@ -305,8 +304,8 @@
       box-shadow: 0 4px 0 #990033;
       transition: all 0.1s;
       width: 85%;
-      margin: 8px 0 16px 0;
-      flex-shrink: 0;
+      margin: 0; /* Cleared margin to let grid push it down */
+      flex-shrink: 0; /* Prevent the button from squishing */
     }
 
     .btn:active {
