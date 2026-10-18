@@ -1651,13 +1651,8 @@ var BattleSystem = (() => {
 function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.save();
 
-    // 1. Draw header text (Both P1 and P2 left-aligned directly on top of their HP bar)
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y - 24, w, 22);
-    ctx.clip();
-
-    ctx.font = '900 11px sans-serif';
+    // 1. Header Text (Left-aligned over health bar, clip-free for mobile WebKit emojis)
+    ctx.font = '900 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
     ctx.textAlign = 'left';
@@ -1668,26 +1663,26 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     const flagStr = flag || '';
     const displayName = `${name} ${flagStr} ${hearts}`.trim();
 
-    // Auto-scale font factor if text exceeds bar width
+    // Auto-scale font if text exceeds health bar width
     const textWidth = ctx.measureText(displayName).width;
-    const maxAllowedWidth = w - 4; // 4px safety padding
-    
+    const maxAllowedWidth = w - 2;
+
     ctx.save();
-    ctx.translate(x, y - 3);
-    if (textWidth > maxAllowedWidth) {
+    ctx.translate(x, y - 2);
+
+    if (textWidth > 0 && textWidth > maxAllowedWidth) {
       const scaleFactor = maxAllowedWidth / textWidth;
       ctx.scale(scaleFactor, scaleFactor);
     }
+
     ctx.fillText(displayName, 0, 0);
     ctx.restore();
-
-    ctx.restore(); // Restore clip region
 
     // 2. Health Bar rendering
     ctx.fillStyle = '#111625';
     ctx.fillRect(x, y, w, h);
 
-    const fillW = w * Math.max(0, hp / maxHp);
+    const fillW = w * Math.max(0, Math.min(1, hp / maxHp));
     ctx.fillStyle = color;
     ctx.fillRect(x, y, fillW, h);
 
