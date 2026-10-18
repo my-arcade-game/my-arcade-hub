@@ -52,7 +52,7 @@ const AudioSystem = (() => {
   }
 
   /**
-   * Global unlock trigger for iOS Safari and Android WebViews
+   * Mobile Safari / Android Web Audio API unlocking mechanism
    */
   function unlock() {
     const audioCtx = getContext();
@@ -65,17 +65,34 @@ const AudioSystem = (() => {
     } else {
       isUnlocked = true;
     }
+
+    // Play 1-frame silent buffer node synchronously to unlock mobile audio context
+    try {
+      const dummyBuffer = audioCtx.createBuffer(1, 1, 22050);
+      const dummySource = audioCtx.createBufferSource();
+      dummySource.buffer = dummyBuffer;
+      dummySource.connect(audioCtx.destination);
+      dummySource.start(0);
+    } catch (e) {
+      // ignore
+    }
   }
 
-  // Bind one-time listeners to auto-unlock audio on first screen touch/tap
-  const unlockEvents = ['pointerdown', 'touchstart', 'click', 'keydown'];
+  // Bind listeners to document and window to catch any screen interaction
+  const unlockEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
   const handleAutoUnlock = () => {
     unlock();
-    if (isUnlocked) {
-      unlockEvents.forEach(evt => window.removeEventListener(evt, handleAutoUnlock, true));
+    if (ctx && ctx.state === 'running') {
+      unlockEvents.forEach(evt => {
+        document.removeEventListener(evt, handleAutoUnlock, true);
+        window.removeEventListener(evt, handleAutoUnlock, true);
+      });
     }
   };
-  unlockEvents.forEach(evt => window.addEventListener(evt, handleAutoUnlock, true));
+  unlockEvents.forEach(evt => {
+    document.addEventListener(evt, handleAutoUnlock, true);
+    window.addEventListener(evt, handleAutoUnlock, true);
+  });
 
   /**
    * Fetches and decodes sound files into Web Audio API buffers
@@ -222,11 +239,9 @@ const AudioSystem = (() => {
 
       const duration = buffer.duration;
 
-      // Handle halfway callback
       const halfwayTime = type === 'fight_start' ? 850 : (duration * 0.45 * 1000);
       setTimeout(triggerHalfway, halfwayTime);
 
-      // Handle end callback
       playedNode.source.onended = finish;
       setTimeout(finish, (duration + 0.2) * 1000);
     }).catch(() => finish());

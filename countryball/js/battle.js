@@ -67,7 +67,6 @@ var BattleSystem = (() => {
     });
   }
 
-  // Calculate controlled damage scaling (Caps at 1.35x to avoid anti-climactic instant one-shots)
   function getDamageScale() {
     const matchSec = Math.floor(matchTimer / 60);
     if (matchSec < 30) return 1.0;
@@ -516,7 +515,6 @@ var BattleSystem = (() => {
     }, 1800);
   }
 
-  // FRANCE ABILITY
   function spawnBaguetteStorm(ownerBall, count = 10, damage = 8) {
     notifyUlt(ownerBall);
 
@@ -554,7 +552,6 @@ var BattleSystem = (() => {
     spawnBaguetteStorm(ownerBall, 10, 8);
   }
 
-  // MALAYSIA ABILITY: SPAWN 3 FLYING KERIS DAGGERS TOWARD ENEMY
   function spawnOrbitingKeris(ownerBall, count = 3) {
     notifyUlt(ownerBall);
     const enemy = balls.find(b => b !== ownerBall);
@@ -584,13 +581,8 @@ var BattleSystem = (() => {
     }
   }
 
-  function updateKerisDaggers() {
-    // Retained for backward compatibility
-  }
-
-  function drawKerisDaggers() {
-    // Retained for backward compatibility
-  }
+  function updateKerisDaggers() {}
+  function drawKerisDaggers() {}
 
   function spawnNapalmStrike(ownerBall, duration = 240) {
     notifyUlt(ownerBall);
@@ -627,7 +619,6 @@ var BattleSystem = (() => {
     }
   }
 
-  // UK ABILITY: ADDED INITIAL SCALDING TEA DAMAGE
   function spawnTeapotSpill(ownerBall) {
     notifyUlt(ownerBall);
     const enemy = balls.find(b => b !== ownerBall);
@@ -677,7 +668,6 @@ var BattleSystem = (() => {
     });
   }
 
-  // INDONESIA ABILITY: SLOWER SANTET LEECH WITH 3-SECOND CATCH TIMER
   function spawnSantetLeech(ownerBall, duration = 300) {
     notifyUlt(ownerBall);
     const enemy = balls.find(b => b !== ownerBall);
@@ -791,7 +781,6 @@ var BattleSystem = (() => {
     }
   }
 
-  // SOUTH KOREA ABILITY: ADDED DIRECT PSYCHIC DAMAGE
   function triggerNeonCharm(ownerBall, duration = 120) {
     notifyUlt(ownerBall);
     const enemy = balls.find(b => b !== ownerBall);
@@ -855,7 +844,6 @@ var BattleSystem = (() => {
     });
   }
 
-  // CANADA ABILITY: BLIZZARD POOLS DEALS SLOW + FROST DAMAGE TICKS
   function spawnMapleBlizzard(ownerBall, duration = 300) {
     notifyUlt(ownerBall);
     for (let i = 0; i < 3; i++) {
@@ -870,7 +858,6 @@ var BattleSystem = (() => {
     }
   }
 
-  // GERMANY ABILITY: IMPACT CHARGE DEALS INITIAL COLLISION DAMAGE
   function enableEnergyPlow(ownerBall) {
     notifyUlt(ownerBall);
     ownerBall.electricTrailTimer = 120;
@@ -1422,7 +1409,6 @@ var BattleSystem = (() => {
     ghosts = [];
     spiritDaggers = [];
 
-    // Perfectly balanced spawn relative to vertical playable field
     balls = [
       new Ball(p1Data, canvas.width * 0.28, canvas.height * 0.53, true),
       new Ball(p2Data, canvas.width * 0.72, canvas.height * 0.53, false)
@@ -1635,9 +1621,9 @@ var BattleSystem = (() => {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.fillRect(0, 53, canvas.width, 1);
 
-    // Symmetric P1 and P2 HUD bars (P1: x=10..145, P2: x=215..350)
-    drawBar(10, 26, 135, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, true, b1.lives);
-    drawBar(215, 26, 135, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, false, b2.lives);
+    // Symmetric HUD bounds (P1: x=10..145, P2: x=215..350)
+    drawBar(10, 26, 135, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, b1.config.flag, true, b1.lives);
+    drawBar(215, 26, 135, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, b2.config.flag, false, b2.lives);
 
     // Center Timer Badge
     const matchSec = Math.floor(matchTimer / 60);
@@ -1662,7 +1648,8 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
-  function drawBar(x, y, w, h, hp, maxHp, color, name, isLeft, lives = 2) {
+  function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
+    ctx.save();
     ctx.font = 'bold 11px Courier New, monospace';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
@@ -1670,16 +1657,25 @@ var BattleSystem = (() => {
     let hearts = '';
     for (let i = 0; i < lives; i++) hearts += '❤️';
 
-    const displayName = `${name} ${hearts}`.trim();
-    const displayNameRight = `${hearts} ${name}`.trim();
+    const flagStr = flag || '';
+    const displayName = isLeft 
+      ? `${name} ${flagStr} ${hearts}`.trim() 
+      : `${hearts} ${flagStr} ${name}`.trim();
 
-    // Constrain name text width to prevent P2 cropping
+    // Dynamically auto-fit font size so long names never bleed past width `w`
+    let fontSize = 11;
+    ctx.font = `bold ${fontSize}px Courier New, monospace`;
+    while (ctx.measureText(displayName).width > w && fontSize > 7) {
+      fontSize--;
+      ctx.font = `bold ${fontSize}px Courier New, monospace`;
+    }
+
     if (isLeft) {
       ctx.textAlign = 'left';
       ctx.fillText(displayName, x, y - 3, w);
     } else {
       ctx.textAlign = 'right';
-      ctx.fillText(displayNameRight, x + w, y - 3, w);
+      ctx.fillText(displayName, x + w, y - 3, w);
     }
 
     ctx.fillStyle = '#111625';
@@ -1698,6 +1694,7 @@ var BattleSystem = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2 + 1);
+    ctx.restore();
   }
 
   function loop() {
@@ -1807,7 +1804,6 @@ var BattleSystem = (() => {
     triggerShake
   };
 
-  // Bind exported ability functions directly to global window to prevent ReferenceErrors
   Object.assign(window, apiExports);
 
   return apiExports;
