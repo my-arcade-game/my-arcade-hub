@@ -1621,9 +1621,9 @@ var BattleSystem = (() => {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.fillRect(0, 53, canvas.width, 1);
 
-    // Symmetric HUD bounds (P1: x=10..145, P2: x=215..350)
-    drawBar(10, 26, 135, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, b1.config.flag, true, b1.lives);
-    drawBar(215, 26, 135, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, b2.config.flag, false, b2.lives);
+    // Symmetric HUD bounds (P1: x=8..148, P2: x=212..352)
+    drawBar(8, 26, 140, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, b1.config.flag, true, b1.lives);
+    drawBar(212, 26, 140, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, b2.config.flag, false, b2.lives);
 
     // Center Timer Badge
     const matchSec = Math.floor(matchTimer / 60);
@@ -1650,7 +1650,14 @@ var BattleSystem = (() => {
 
   function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.save();
-    ctx.font = 'bold 11px Courier New, monospace';
+
+    // 1. Draw header text with strict clipping region and scale transform
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y - 24, w, 22);
+    ctx.clip();
+
+    ctx.font = '900 11px sans-serif';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
 
@@ -1662,22 +1669,37 @@ var BattleSystem = (() => {
       ? `${name} ${flagStr} ${hearts}`.trim() 
       : `${hearts} ${flagStr} ${name}`.trim();
 
-    // Dynamically auto-fit font size so long names never bleed past width `w`
-    let fontSize = 11;
-    ctx.font = `bold ${fontSize}px Courier New, monospace`;
-    while (ctx.measureText(displayName).width > w && fontSize > 7) {
-      fontSize--;
-      ctx.font = `bold ${fontSize}px Courier New, monospace`;
-    }
+    // Measure raw width + safety padding for mobile emoji clusters
+    const rawWidth = ctx.measureText(displayName).width;
+    const requiredWidth = rawWidth * 1.22;
 
-    if (isLeft) {
-      ctx.textAlign = 'left';
-      ctx.fillText(displayName, x, y - 3, w);
+    if (requiredWidth > w) {
+      const scaleFactor = w / requiredWidth;
+      ctx.save();
+      if (isLeft) {
+        ctx.translate(x, y - 3);
+        ctx.scale(scaleFactor, scaleFactor);
+        ctx.textAlign = 'left';
+        ctx.fillText(displayName, 0, 0);
+      } else {
+        ctx.translate(x + w, y - 3);
+        ctx.scale(scaleFactor, scaleFactor);
+        ctx.textAlign = 'right';
+        ctx.fillText(displayName, 0, 0);
+      }
+      ctx.restore();
     } else {
-      ctx.textAlign = 'right';
-      ctx.fillText(displayName, x + w, y - 3, w);
+      if (isLeft) {
+        ctx.textAlign = 'left';
+        ctx.fillText(displayName, x, y - 3);
+      } else {
+        ctx.textAlign = 'right';
+        ctx.fillText(displayName, x + w, y - 3);
+      }
     }
+    ctx.restore();
 
+    // 2. Health Bar rendering
     ctx.fillStyle = '#111625';
     ctx.fillRect(x, y, w, h);
 
@@ -1694,6 +1716,7 @@ var BattleSystem = (() => {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2 + 1);
+
     ctx.restore();
   }
 
