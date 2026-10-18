@@ -1651,42 +1651,37 @@ var BattleSystem = (() => {
 function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.save();
 
-    // 1. Draw header text with strict clipping region and dynamic scale transform
+    // 1. Draw header text (Both P1 and P2 left-aligned directly on top of their HP bar)
     ctx.save();
     ctx.beginPath();
-    ctx.rect(x - 2, y - 24, w + 4, 22);
+    ctx.rect(x, y - 24, w, 22);
     ctx.clip();
 
     ctx.font = '900 11px sans-serif';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
+    ctx.textAlign = 'left';
 
     let hearts = '';
     for (let i = 0; i < lives; i++) hearts += '❤️';
 
     const flagStr = flag || '';
-    const displayName = isLeft 
-      ? `${name} ${flagStr} ${hearts}`.trim() 
-      : `${hearts} ${flagStr} ${name}`.trim();
+    const displayName = `${name} ${flagStr} ${hearts}`.trim();
 
+    // Auto-scale font factor if text exceeds bar width
     const textWidth = ctx.measureText(displayName).width;
-    const scaleFactor = textWidth > w ? (w / textWidth) : 1.0;
-
+    const maxAllowedWidth = w - 4; // 4px safety padding
+    
     ctx.save();
-    if (isLeft) {
-      ctx.translate(x, y - 3);
-      if (scaleFactor < 1.0) ctx.scale(scaleFactor, scaleFactor);
-      ctx.textAlign = 'left';
-      ctx.fillText(displayName, 0, 0);
-    } else {
-      ctx.translate(x + w, y - 3);
-      if (scaleFactor < 1.0) ctx.scale(scaleFactor, scaleFactor);
-      ctx.textAlign = 'right';
-      ctx.fillText(displayName, 0, 0);
+    ctx.translate(x, y - 3);
+    if (textWidth > maxAllowedWidth) {
+      const scaleFactor = maxAllowedWidth / textWidth;
+      ctx.scale(scaleFactor, scaleFactor);
     }
+    ctx.fillText(displayName, 0, 0);
     ctx.restore();
 
-    ctx.restore(); // Restore clip state
+    ctx.restore(); // Restore clip region
 
     // 2. Health Bar rendering
     ctx.fillStyle = '#111625';
@@ -1707,7 +1702,7 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2 + 1);
 
     ctx.restore();
-  } function loop() {
+  }function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
