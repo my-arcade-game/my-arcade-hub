@@ -1648,13 +1648,13 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
-  function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
+function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.save();
 
-    // 1. Draw header text with strict clipping region and scale transform
+    // 1. Draw header text with strict clipping region and dynamic scale transform
     ctx.save();
     ctx.beginPath();
-    ctx.rect(x, y - 24, w, 22);
+    ctx.rect(x - 2, y - 24, w + 4, 22);
     ctx.clip();
 
     ctx.font = '900 11px sans-serif';
@@ -1669,35 +1669,24 @@ var BattleSystem = (() => {
       ? `${name} ${flagStr} ${hearts}`.trim() 
       : `${hearts} ${flagStr} ${name}`.trim();
 
-    // Measure raw width + safety padding for mobile emoji clusters
-    const rawWidth = ctx.measureText(displayName).width;
-    const requiredWidth = rawWidth * 1.22;
+    const textWidth = ctx.measureText(displayName).width;
+    const scaleFactor = textWidth > w ? (w / textWidth) : 1.0;
 
-    if (requiredWidth > w) {
-      const scaleFactor = w / requiredWidth;
-      ctx.save();
-      if (isLeft) {
-        ctx.translate(x, y - 3);
-        ctx.scale(scaleFactor, scaleFactor);
-        ctx.textAlign = 'left';
-        ctx.fillText(displayName, 0, 0);
-      } else {
-        ctx.translate(x + w, y - 3);
-        ctx.scale(scaleFactor, scaleFactor);
-        ctx.textAlign = 'right';
-        ctx.fillText(displayName, 0, 0);
-      }
-      ctx.restore();
+    ctx.save();
+    if (isLeft) {
+      ctx.translate(x, y - 3);
+      if (scaleFactor < 1.0) ctx.scale(scaleFactor, scaleFactor);
+      ctx.textAlign = 'left';
+      ctx.fillText(displayName, 0, 0);
     } else {
-      if (isLeft) {
-        ctx.textAlign = 'left';
-        ctx.fillText(displayName, x, y - 3);
-      } else {
-        ctx.textAlign = 'right';
-        ctx.fillText(displayName, x + w, y - 3);
-      }
+      ctx.translate(x + w, y - 3);
+      if (scaleFactor < 1.0) ctx.scale(scaleFactor, scaleFactor);
+      ctx.textAlign = 'right';
+      ctx.fillText(displayName, 0, 0);
     }
     ctx.restore();
+
+    ctx.restore(); // Restore clip state
 
     // 2. Health Bar rendering
     ctx.fillStyle = '#111625';
@@ -1718,9 +1707,7 @@ var BattleSystem = (() => {
     ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2 + 1);
 
     ctx.restore();
-  }
-
-  function loop() {
+  } function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
