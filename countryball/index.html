@@ -15,6 +15,9 @@
     }
 
     html, body {
+      position: fixed; /* Locks the body perfectly to the mobile viewport */
+      top: 0;
+      left: 0;
       width: 100vw;
       height: 100dvh;
       background: #08090f;
@@ -36,7 +39,7 @@
       100% { border-color: #ff0055; box-shadow: 0 0 30px rgba(255, 0, 85, 0.6); }
     }
 
-    /* Responsive Mobile Scaling Fix (Prevents Cropping on Phones) */
+    /* Responsive Mobile Scaling Fix */
     #game-container {
       position: relative;
       width: min(360px, 100vw, calc(100dvh * (9 / 16)));
@@ -84,10 +87,10 @@
       align-items: center;
       justify-content: flex-start;
       gap: 8px;
-      padding: 14px 10px 20px 10px; /* 20px bottom padding to keep button off edge */
+      padding: 14px 10px 20px 10px;
       background: rgba(18, 20, 32, 0.95);
       z-index: 10;
-      overflow: hidden; /* Prevent screen scroll, grid will scroll instead */
+      overflow: hidden;
     }
 
     #screen-start {
@@ -185,16 +188,16 @@
       text-shadow: 1px 1px #ff0055;
     }
 
-    /* --- GRID & MOBILE SCROLLBAR FIX --- */
+    /* --- GRID & SCROLLBAR FIX --- */
     .grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 6px;
       width: 100%;
-      flex: 1 1 0%; /* Take up exactly the remaining vertical space */
-      min-height: 0; /* Prevent expanding beyond container */
+      flex: 1 1 0%;
+      min-height: 0;
       margin: 4px 0 8px 0;
-      overflow-y: auto; /* Enable vertical scrolling */
+      overflow-y: auto;
       overflow-x: hidden;
       padding-right: 4px;
       scrollbar-width: thin;
@@ -203,27 +206,22 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    /* Webkit (Chrome, Edge, Safari) Scrollbar Styling */
-    .grid::-webkit-scrollbar,
-    .screen::-webkit-scrollbar {
+    .grid::-webkit-scrollbar {
       width: 6px;
     }
 
-    .grid::-webkit-scrollbar-track,
-    .screen::-webkit-scrollbar-track {
+    .grid::-webkit-scrollbar-track {
       background: #0d0f18;
       border-radius: 4px;
     }
 
-    .grid::-webkit-scrollbar-thumb,
-    .screen::-webkit-scrollbar-thumb {
+    .grid::-webkit-scrollbar-thumb {
       background: linear-gradient(180deg, #ff0055 0%, #00f0ff 100%);
       border-radius: 4px;
       box-shadow: 0 0 8px #ff0055;
     }
 
-    .grid::-webkit-scrollbar-thumb:hover,
-    .screen::-webkit-scrollbar-thumb:hover {
+    .grid::-webkit-scrollbar-thumb:hover {
       background: #ffe600;
     }
 
@@ -304,8 +302,8 @@
       box-shadow: 0 4px 0 #990033;
       transition: all 0.1s;
       width: 85%;
-      margin: 0; /* Cleared margin to let grid push it down */
-      flex-shrink: 0; /* Prevent the button from squishing */
+      margin: 0;
+      flex-shrink: 0;
     }
 
     .btn:active {
@@ -542,19 +540,23 @@
 <script src="js/battle.js"></script>
 <script src="js/main.js"></script>
 
-<!-- MOBILE TOUCH AUDIO UNLOCKER -->
+<!-- ROBUST MOBILE TOUCH AUDIO UNLOCKER -->
 <script>
   (function initMobileSupport() {
-    function unlockAudio() {
-      if (window.AudioSystem && window.AudioSystem.unlock) {
+    const unlockAudio = () => {
+      if (window.AudioSystem && typeof window.AudioSystem.unlock === 'function') {
         window.AudioSystem.unlock();
       }
-      window.removeEventListener('touchstart', unlockAudio);
-      window.removeEventListener('click', unlockAudio);
-    }
+      // Remove listeners after first successful interaction
+      ['touchstart', 'touchend', 'click', 'pointerdown'].forEach(evt => 
+        document.removeEventListener(evt, unlockAudio)
+      );
+    };
 
-    window.addEventListener('touchstart', unlockAudio, { once: true });
-    window.addEventListener('click', unlockAudio, { once: true });
+    // Attach aggressively to the document to catch any interaction
+    ['touchstart', 'touchend', 'click', 'pointerdown'].forEach(evt => 
+      document.addEventListener(evt, unlockAudio, { once: true, passive: true })
+    );
   })();
 </script>
 </body>
