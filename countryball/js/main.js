@@ -31,7 +31,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         modeBadge.style.color = Multiplayer.isHost ? '#00f2fe' : '#ff0055';
       }
 
-      // Attach Realtime broadcast hooks for online sync
+      // Initialize MenuSystem with exact multiplayer state
+      if (typeof MenuSystem !== 'undefined') {
+        MenuSystem.init({ active: true, isHost: Multiplayer.isHost });
+      }
+
+      // Realtime broadcast listener: Host tap transitions BOTH players to flag selection
       if (Multiplayer.channel) {
         Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
           openMenuScreen();
@@ -88,14 +93,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       modeBadge.innerText = 'SOLO / LOCAL PLAY';
       modeBadge.style.color = '#05ffa1';
     }
+    if (typeof MenuSystem !== 'undefined') {
+      MenuSystem.init({ active: false, isHost: false });
+    }
   }
 
-  // Initialize MenuSystem with current game mode configuration
-  if (typeof MenuSystem !== 'undefined') {
-    MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer ? Multiplayer.isHost : false });
-  }
-
-  // Hook triggered when a player selects a country locally in online mode
+  // Realtime hook triggered when local player picks a country
   window.onLocalSelectionChange = (slot, countryId) => {
     if (isMultiplayerActive && Multiplayer.channel) {
       Multiplayer.channel.send({
@@ -148,13 +151,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function handlePressStart() {
-    // Broadcast start signal to connected player if playing online
-    if (isMultiplayerActive && Multiplayer.channel) {
-      Multiplayer.channel.send({
-        type: 'broadcast',
-        event: 'press_start_menu',
-        payload: {}
-      });
+    if (gameStarted) return;
+
+    if (isMultiplayerActive) {
+      // In multiplayer, ONLY the Host can trigger the splash screen tap
+      if (!Multiplayer.isHost) return;
+
+      // Host broadcasts signal to Guest device
+      if (Multiplayer.channel) {
+        Multiplayer.channel.send({
+          type: 'broadcast',
+          event: 'press_start_menu',
+          payload: {}
+        });
+      }
     }
 
     openMenuScreen();
@@ -179,7 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      // Broadcast start signal to Guest device if playing online
+      // Broadcast fight start to Guest
       if (isMultiplayerActive && Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
@@ -201,7 +211,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
-      // Broadcast rematch signal to connected player if playing online
       if (isMultiplayerActive && Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
@@ -224,7 +233,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnSelect) {
     btnSelect.addEventListener('click', () => {
-      // Broadcast reset signal to connected player if playing online
       if (isMultiplayerActive && Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
