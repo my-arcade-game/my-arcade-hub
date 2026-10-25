@@ -98,12 +98,20 @@ export const Multiplayer = {
                 } else {
                     window.location.href = gameUrl;
                 }
-            })
-            .subscribe(async (status) => {
+            });
+
+        // Return a Promise that resolves only when WebSocket status is SUBSCRIBED
+        return new Promise((resolve, reject) => {
+            this.channel.subscribe(async (status, err) => {
                 if (status === 'SUBSCRIBED') {
                     await this.channel.track({ isHost: this.isHost });
+                    resolve(status);
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    console.error(`Realtime subscription error (${status}):`, err);
+                    reject(err || new Error(`Channel subscription failed: ${status}`));
                 }
             });
+        });
     },
 
     async broadcastStartGame(gamePath) {
