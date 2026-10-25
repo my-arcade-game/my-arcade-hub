@@ -1,3 +1,5 @@
+import { Multiplayer } from '../shared/multiplayer.js';
+
 // --- 1. GAME VARIABLES & STATE ---
 let players = [];
 let currentPlayerIndex = 0;
@@ -6,17 +8,28 @@ let targetLat = 0;
 let targetLng = 0;
 let locationsList = [];
 let usedLocations = [];
+
+// Map Markers & Lines
 let userMarker = null;
-let musicPlaying = false;
-let resultLine = null;
+let opponentMarker = null;
 let actualMarker = null;
+let userLine = null;
+let opponentLine = null;
+
+let musicPlaying = false;
+let isAudioUnlocked = false;
+
+// Dual-Mode Multiplayer State
+let isMultiplayerActive = false;
+let isHost = false;
+let myPlayerId = 1;
+let roundEvaluated = false;
 
 // Timer configuration states
 let roundTimerInterval = null;
 let timeRemaining = 30;
 let maxTimerSetting = 30;
 let maxHpSetting = 10000;
-let isAudioUnlocked = false;
 
 // Map state
 let isMapOpen = true;
@@ -41,6 +54,86 @@ const audio = {
 // Sound effect pools
 const bgmTracks = ['bgm_1.mp3', 'bgm_2.mp3'];
 const winTracks = ['win_1.mp3', 'win_2.mp3'];
+
+// --- DUAL MODE & SUPABASE MULTIPLAYER INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomCode = urlParams.get('room');
+    const modeBadge = document.getElementById('mode-badge');
+    const playerButtons = document.getElementById('player-buttons');
+    const startBtn = document.getElementById('start-game-btn');
+
+    if (roomCode) {
+        await Multiplayer.init();
+        isMultiplayerActive = true;
+        isHost = Multiplayer.isHost;
+        myPlayerId = isHost ? 1 : 2;
+        selectedPlayerCount = 2;
+
+        if (modeBadge) {
+            modeBadge.innerText = `ROOM: ${Multiplayer.roomCode} | ${isHost ? 'P1 (HOST)' : 'P2 (GUEST)'}`;
+            modeBadge.style.color = isHost ? '#00f2fe' : '#ff0055';
+        }
+
+        if (playerButtons) {
+            playerButtons.querySelectorAll('.player-btn').forEach(btn => {
+                if (btn.getAttribute('data-count') !== '2') {
+                    btn.style.opacity = '0.3';
+                    btn.style.pointerEvents = 'none';
+                }
+            });
+        }
+
+        if (!isHost && startBtn) {
+            startBtn.style.opacity = '0.5';
+            startBtn.style.pointerEvents = 'none';
+            startBtn.innerText = 'WAITING FOR HOST...';
+        }
+
+        // Realtime Event Synchronization for Simultaneous Gameplay
+        if (Multiplayer.channel) {
+            Multiplayer.channel.on('broadcast', { event: 'start_earth_game' }, (payload) => {
+                const data = payload.payload;
+                maxHpSetting = data.hp;
+                maxTimerSetting = data.timer;
+                selectedPlayerCount = 2;
+                targetLat = data.targetLat;
+                targetLng = data.targetLng;
+                document.getElementById('location-photo').src = data.photoPic;
+
+                players = [
+                    { id: 1, hp: maxHpSetting, alive: true, currentGuess: null },
+                    { id: 2, hp: maxHpSetting, alive: true, currentGuess: null }
+                ];
+
+                screens.menu.style.display = 'none';
+                startSimultaneousRound();
+            });
+
+            Multiplayer.channel.on('broadcast', { event: 'start_next_round' }, (payload) => {
+                const data = payload.payload;
+                targetLat = data.targetLat;
+                targetLng = data.targetLng;
+                document.getElementById('location-photo').src = data.photoPic;
+                startSimultaneousRound();
+            });
+
+            Multiplayer.channel.on('broadcast', { event: 'submit_earth_guess' }, (payload) => {
+                const { playerId, lat, lng } = payload.payload;
+                const p = players.find(pl => pl.id === playerId);
+                if (p) {
+                    p.currentGuess = { lat, lng };
+                }
+                checkAllGuessesSubmitted();
+            });
+        }
+    } else {
+        if (modeBadge) {
+            modeBadge.innerText = 'SOLO / LOCAL PLAY';
+            modeBadge.style.color = '#05ffa1';
+        }
+    }
+});
 
 // --- ROBUST MOBILE AUDIO UNLOCKER & SFX MANAGER ---
 function unlockAllAudio() {
@@ -157,7 +250,7 @@ const fallbackLocations = [
 const locationPhoto = document.getElementById('location-photo');
 locationPhoto.onerror = function() {
     console.warn("External photo failed to load. Fetching next backup location.");
-    loadNewRound();
+    if (isHost || !isMultiplayerActive) loadNewRound();
 };
 
 function customAlert(message) {
@@ -261,6 +354,9 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_M
 }).addTo(map);
 
 map.on('click', function(e) {
+    const myPlayer = players.find(p => p.id === myPlayerId) || players[0];
+    if (myPlayer && myPlayer.currentGuess) return; // Lock pin after guess submission
+
     if (userMarker !== null) map.removeLayer(userMarker);
     userMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
 });
@@ -296,17 +392,34 @@ async function fetchWikipediaLocations() {
 }
 fetchWikipediaLocations();
 
-async function loadNewRound() {
+function getRandomLocation() {
     if (locationsList.length === 0) {
         locationsList = shuffleArray([...fallbackLocations]);
     }
-    
-    const currentLocation = locationsList.pop();
-    usedLocations.push(currentLocation);
+    const loc = locationsList.pop();
+    usedLocations.push(loc);
+    return loc;
+}
 
-    document.getElementById('location-photo').src = currentLocation.pic;
+function loadNewRound() {
+    const currentLocation = getRandomLocation();
     targetLat = currentLocation.lat;
     targetLng = currentLocation.lng;
+    document.getElementById('location-photo').src = currentLocation.pic;
+
+    if (isMultiplayerActive && isHost && Multiplayer.channel) {
+        Multiplayer.channel.send({
+            type: 'broadcast',
+            event: 'start_next_round',
+            payload: {
+                targetLat: currentLocation.lat,
+                targetLng: currentLocation.lng,
+                photoPic: currentLocation.pic
+            }
+        });
+    }
+
+    startSimultaneousRound();
 }
 
 // --- 4. TOGGLEABLE & EXPANDABLE MAP CONTROLLER ---
@@ -358,6 +471,7 @@ if (expandMapBtn) {
 const playerBtns = document.querySelectorAll('.player-btn');
 playerBtns.forEach(btn => {
     btn.addEventListener('click', function() {
+        if (isMultiplayerActive) return;
         unlockAllAudio();
         playerBtns.forEach(b => b.classList.remove('active'));
         this.classList.add('active');
@@ -382,20 +496,38 @@ document.getElementById('toggle-music-btn').addEventListener('click', function()
 });
 
 document.getElementById('start-game-btn').addEventListener('click', function() {
+    if (isMultiplayerActive && !isHost) return;
+
     unlockAllAudio();
     maxHpSetting = parseInt(document.getElementById('starting-hp').value);
     maxTimerSetting = parseInt(document.getElementById('timer-setting').value);
     
-    players = Array.from({ length: selectedPlayerCount }, (_, i) => ({ id: i + 1, hp: maxHpSetting, alive: true }));
-    currentPlayerIndex = 0;
+    players = Array.from({ length: selectedPlayerCount }, (_, i) => ({ id: i + 1, hp: maxHpSetting, alive: true, currentGuess: null }));
     
-    buildArenaHealthBars(); 
-    
+    const initialLocation = getRandomLocation();
+    targetLat = initialLocation.lat;
+    targetLng = initialLocation.lng;
+    document.getElementById('location-photo').src = initialLocation.pic;
+
+    if (isMultiplayerActive && isHost && Multiplayer.channel) {
+        Multiplayer.channel.send({
+            type: 'broadcast',
+            event: 'start_earth_game',
+            payload: {
+                hp: maxHpSetting,
+                timer: maxTimerSetting,
+                targetLat: initialLocation.lat,
+                targetLng: initialLocation.lng,
+                photoPic: initialLocation.pic
+            }
+        });
+    }
+
     screens.menu.style.display = 'none';
-    showTurnScreen();
+    startSimultaneousRound();
 });
 
-// --- 6. BATTLE ROYALE GAMEPLAY LOOP ---
+// --- 6. SIMULTANEOUS GAMEPLAY & REASONING LOOP ---
 function buildArenaHealthBars() {
     const container = document.getElementById('all-players-health-container');
     container.innerHTML = ""; 
@@ -403,7 +535,7 @@ function buildArenaHealthBars() {
     players.forEach(p => {
         const row = document.createElement('div');
         row.id = `player-row-${p.id}`;
-        row.className = "player-row-ui";
+        row.className = "player-row-ui active-turn";
         
         row.innerHTML = `
             <div class="hb-meta-row">
@@ -430,13 +562,44 @@ function refreshArenaUIDashboard() {
         const percentage = (p.hp / maxHpSetting) * 100;
         fill.style.width = `${percentage}%`;
         
-        row.classList.remove('active-turn', 'dead');
+        row.classList.remove('dead');
         if (!p.alive) {
             row.classList.add('dead');
-        } else if (p.id === players[currentPlayerIndex].id) {
-            row.classList.add('active-turn');
         }
     });
+}
+
+function startSimultaneousRound() {
+    roundEvaluated = false;
+    players.forEach(p => p.currentGuess = null);
+
+    // Clean Map Elements
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    if (opponentMarker) { map.removeLayer(opponentMarker); opponentMarker = null; }
+    if (actualMarker) { map.removeLayer(actualMarker); actualMarker = null; }
+    if (userLine) { map.removeLayer(userLine); userLine = null; }
+    if (opponentLine) { map.removeLayer(opponentLine); opponentLine = null; }
+
+    map.setView([20, 0], 2);
+
+    // Reset Guess Button
+    const guessBtn = document.getElementById('guess-btn');
+    guessBtn.style.display = 'block';
+    guessBtn.style.opacity = '1';
+    guessBtn.style.pointerEvents = 'auto';
+    guessBtn.innerText = 'Make Guess';
+
+    screens.turn.style.display = 'none';
+    screens.game.style.display = 'block';
+
+    buildArenaHealthBars();
+    refreshArenaUIDashboard();
+    toggleMap(true);
+
+    setTimeout(() => {
+        map.invalidateSize();
+        startRoundClockCountdown();
+    }, 100);
 }
 
 function startRoundClockCountdown() {
@@ -459,7 +622,6 @@ function startRoundClockCountdown() {
             if (musicPlaying) {
                 audio.bgm.pause();
             }
-            
             if (audio.ticking.paused) {
                 audio.ticking.play().catch(err => console.log("Ticking playback stalled: ", err)); 
             }
@@ -473,7 +635,7 @@ function startRoundClockCountdown() {
             clearInterval(roundTimerInterval);
             audio.ticking.pause();
             audio.ticking.currentTime = 0;
-            handleTimeExpirationPenalty(); 
+            evaluateRoundResults(); 
         }
     }, 1000);
 }
@@ -484,129 +646,118 @@ function stopRoundClockCountdown() {
     audio.ticking.currentTime = 0;
 }
 
-function showTurnScreen() {
-    loadNewRound(); 
-    let p = players[currentPlayerIndex];
-    document.getElementById('player-turn-text').innerText = `Player ${p.id}'s Turn`;
-    document.getElementById('player-hp-text').innerText = `HP: ${p.hp} ❤️`;
-    
-    if (musicPlaying) {
-        audio.ticking.pause();
-        audio.ticking.currentTime = 0;
-        if (audio.bgm.paused) {
-            playRandomBGM();
-        }
-    }
-    
-    screens.game.style.display = 'none';
-    screens.turn.style.display = 'flex';
-}
-
-document.getElementById('begin-turn-btn').addEventListener('click', function() {
+// SUBMIT GUESS
+document.getElementById('guess-btn').addEventListener('click', function() {
     unlockAllAudio();
-    screens.turn.style.display = 'none';
-    screens.game.style.display = 'block';
+    if (userMarker === null) return customAlert("Drop a pin first!");
     
-    refreshArenaUIDashboard(); 
-    toggleMap(true);
-    setTimeout(() => {
-        map.invalidateSize();
-        startRoundClockCountdown(); 
-    }, 100); 
-});
-
-async function handleTimeExpirationPenalty() {
-    document.getElementById('guess-btn').style.display = 'none';
-    
-    const penaltyDamage = 5000;
-    let p = players[currentPlayerIndex];
-    
-    playSFX('lose');
-
-    await customAlert(`⏰ TIME EXPIRED!\nPlayer ${p.id} stood frozen and took a ${penaltyDamage} HP penalty! ⚡`);
-    
-    p.hp = Math.max(0, p.hp - penaltyDamage);
-    refreshArenaUIDashboard();
-    
-    setTimeout(() => {
-        evaluatePostTurnRules(p, penaltyDamage);
-    }, 500);
-}
-
-document.getElementById('guess-btn').addEventListener('click', async function() {
-    unlockAllAudio();
-    if (userMarker === null) return await customAlert("Drop a pin first!");
-    
-    playSFX('guess'); 
-
-    stopRoundClockCountdown(); 
-    document.getElementById('guess-btn').style.display = 'none';
-
     const userLatLng = userMarker.getLatLng();
-    const actualLatLng = [targetLat, targetLng];
-    const distanceInMeters = map.distance(userLatLng, actualLatLng);
-    const damage = Math.round(distanceInMeters / 1000);
+    const myPlayer = players.find(p => p.id === myPlayerId) || players[0];
+    myPlayer.currentGuess = { lat: userLatLng.lat, lng: userLatLng.lng };
 
-    actualMarker = L.marker(actualLatLng).addTo(map);
-    resultLine = L.polyline([userLatLng, actualLatLng], { color: 'red', weight: 3, className: 'animated-line' }).addTo(map);
+    playSFX('guess');
 
-    map.fitBounds(resultLine.getBounds(), { padding: [50, 50] });
+    const guessBtn = document.getElementById('guess-btn');
+    guessBtn.style.opacity = '0.5';
+    guessBtn.style.pointerEvents = 'none';
+    guessBtn.innerText = isMultiplayerActive ? 'Waiting for Opponent...' : 'Processing...';
 
-    let p = players[currentPlayerIndex];
-    p.hp = Math.max(0, p.hp - damage);
-    refreshArenaUIDashboard(); 
-
-    setTimeout(() => {
-        evaluatePostTurnRules(p, damage);
-    }, 2500); 
-});
-
-async function evaluatePostTurnRules(player, damageTaken) {
-    if (player.hp <= 0) {
-        player.alive = false;
-        const aliveCount = players.filter(pl => pl.alive).length;
-        
-        if (aliveCount >= 1) {
-            playSFX('lose');
-        }
-        
-        await customAlert(`Player ${player.id} took ${damageTaken} damage and is ELIMINATED! 💀`);
-    } else {
-        await customAlert(`Player ${player.id} took ${damageTaken} damage!\nRemaining HP: ${player.hp} ❤️`);
+    if (isMultiplayerActive && Multiplayer.channel) {
+        Multiplayer.channel.send({
+            type: 'broadcast',
+            event: 'submit_earth_guess',
+            payload: {
+                playerId: myPlayerId,
+                lat: userLatLng.lat,
+                lng: userLatLng.lng
+            }
+        });
     }
 
-    if (userMarker) map.removeLayer(userMarker);
-    if (actualMarker) map.removeLayer(actualMarker);
-    if (resultLine) map.removeLayer(resultLine);
-    userMarker = null;
-    map.setView([20, 0], 2);
-    
-    document.getElementById('guess-btn').style.display = 'block';
+    checkAllGuessesSubmitted();
+});
 
-    const alivePlayers = players.filter(pl => pl.alive);
-    
+function checkAllGuessesSubmitted() {
+    const alivePlayers = players.filter(p => p.alive);
+    const allGuessed = alivePlayers.every(p => p.currentGuess !== null);
+
+    if (allGuessed && !roundEvaluated) {
+        stopRoundClockCountdown();
+        evaluateRoundResults();
+    }
+}
+
+// EVALUATE ALL GUESSES AT ONCE
+async function evaluateRoundResults() {
+    if (roundEvaluated) return;
+    roundEvaluated = true;
+
+    stopRoundClockCountdown();
+    document.getElementById('guess-btn').style.display = 'none';
+
+    const actualLatLng = [targetLat, targetLng];
+    actualMarker = L.marker(actualLatLng).addTo(map);
+
+    let recapMessages = [];
+    let boundsGroup = [actualLatLng];
+
+    players.forEach(p => {
+        if (!p.alive) return;
+
+        if (p.currentGuess) {
+            const pLatLng = [p.currentGuess.lat, p.currentGuess.lng];
+            const distMeters = map.distance(pLatLng, actualLatLng);
+            const damage = Math.round(distMeters / 1000);
+            p.hp = Math.max(0, p.hp - damage);
+
+            boundsGroup.push(pLatLng);
+
+            const color = p.id === 1 ? '#00f2fe' : '#ff0055';
+            const line = L.polyline([pLatLng, actualLatLng], { color: color, weight: 3, className: 'animated-line' }).addTo(map);
+
+            if (p.id === myPlayerId) userLine = line;
+            else opponentLine = line;
+
+            if (p.id !== myPlayerId) {
+                opponentMarker = L.marker(pLatLng).addTo(map);
+            }
+
+            recapMessages.push(`Player ${p.id}: ${Math.round(distMeters / 1000)} km off (-${damage} HP)`);
+        } else {
+            const penalty = 5000;
+            p.hp = Math.max(0, p.hp - penalty);
+            recapMessages.push(`Player ${p.id}: Time Expired! (-${penalty} HP)`);
+        }
+
+        if (p.hp <= 0) p.alive = false;
+    });
+
+    if (boundsGroup.length > 1) {
+        map.fitBounds(L.latLngBounds(boundsGroup), { padding: [40, 40] });
+    }
+
+    refreshArenaUIDashboard();
+
+    await customAlert(`📍 ROUND RESULTS:\n\n` + recapMessages.join('\n'));
+
+    const alivePlayers = players.filter(p => p.alive);
+
     if (alivePlayers.length === 1) {
         audio.bgm.pause();
-        audio.bgm.currentTime = 0;
         audio.ticking.pause();
-        
         playRandomWin();
         await customAlert(`🎉 GAME OVER!\nPlayer ${alivePlayers[0].id} WINS! 🎉`);
         screens.game.style.display = 'none';
         screens.menu.style.display = 'flex';
     } else if (alivePlayers.length === 0) {
         audio.bgm.pause();
-        audio.bgm.currentTime = 0;
         audio.ticking.pause();
-        
         await customAlert("Everyone died! It's a draw.");
         screens.game.style.display = 'none';
         screens.menu.style.display = 'flex';
     } else {
-        do {
-            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
-        } while (!players[currentPlayerIndex].alive);
-        
-        showTurnScreen();
+        if (isHost || !isMultiplayerActive) {
+            loadNewRound();
+        }
     }
 }
