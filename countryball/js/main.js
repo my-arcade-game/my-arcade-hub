@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnSelect = document.getElementById('btn-select');
   const modeBadge = document.getElementById('mode-badge');
 
-  let gameStarted = false;
+  let currentScreenName = 'start';
   let isMultiplayerActive = false;
 
   // 1. DUAL-MODE INITIALIZATION
@@ -36,12 +36,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         MenuSystem.init({ active: true, isHost: Multiplayer.isHost });
       }
 
-      // Realtime broadcast listener: Host tap transitions BOTH players to flag selection
+      // Setup Broadcast Listeners
       if (Multiplayer.channel) {
+        // Broadcast: Start menu command received from connected player
         Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
           openMenuScreen();
         });
 
+        // Broadcast: Selection updated
         Multiplayer.channel.on('broadcast', { event: 'select_country' }, (payload) => {
           const { slot, countryId } = payload.payload;
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
@@ -51,6 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
+        // Broadcast: Start fight
         Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
           const { p1Id, p2Id } = payload.payload;
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
@@ -58,6 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           const p2 = list.find(c => c.id === p2Id);
 
           if (p1 && p2) {
+            currentScreenName = 'battle';
             if (screenMenu) screenMenu.classList.add('hidden');
             setRandomBackground();
             if (window.BattleSystem) {
@@ -68,7 +72,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
+        // Broadcast: Rematch
         Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, () => {
+          currentScreenName = 'battle';
           const selections = MenuSystem.getSelections();
           if (screenWinner) screenWinner.classList.add('hidden');
           if (window.BattleSystem) {
@@ -79,10 +85,50 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
+        // Broadcast: Select again
         Multiplayer.channel.on('broadcast', { event: 'select_again' }, () => {
+          currentScreenName = 'menu';
           if (screenWinner) screenWinner.classList.add('hidden');
           if (screenMenu) screenMenu.classList.remove('hidden');
           MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
+        });
+
+        // Broadcast: State sync request
+        Multiplayer.channel.on('broadcast', { event: 'request_game_state' }, () => {
+          if (Multiplayer.isHost) {
+            if (currentScreenName === 'menu') {
+              Multiplayer.channel.send({
+                type: 'broadcast',
+                event: 'press_start_menu',
+                payload: {}
+              });
+            }
+            const selections = MenuSystem.getSelections();
+            Multiplayer.channel.send({
+              type: 'broadcast',
+              event: 'game_state_sync',
+              payload: {
+                screen: currentScreenName,
+                p1Id: selections.p1 ? selections.p1.id : null,
+                p2Id: selections.p2 ? selections.p2.id : null
+              }
+            });
+          }
+        });
+
+        // Broadcast: Game state sync response
+        Multiplayer.channel.on('broadcast', { event: 'game_state_sync' }, (payload) => {
+          const { screen, p1Id, p2Id } = payload.payload;
+          const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
+
+          if (screen === 'menu' && currentScreenName === 'start') {
+            openMenuScreen();
+          }
+
+          if (typeof MenuSystem !== 'undefined') {
+            if (p1Id) MenuSystem.setSelection('p1', list.find(c => c.id === p1Id));
+            if (p2Id) MenuSystem.setSelection('p2', list.find(c => c.id === p2Id));
+          }
         });
       }
     } catch (err) {
@@ -98,7 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Realtime hook triggered when local player picks a country
+  // Local selection trigger
   window.onLocalSelectionChange = (slot, countryId) => {
     if (isMultiplayerActive && Multiplayer.channel) {
       Multiplayer.channel.send({
@@ -124,8 +170,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function openMenuScreen() {
-    if (gameStarted) return;
-    gameStarted = true;
+    if (currentScreenName === 'menu' || currentScreenName === 'battle') return;
+    currentScreenName = 'menu';
 
     if (screenStart) screenStart.classList.add('hidden');
     if (screenMenu) screenMenu.classList.remove('hidden');
@@ -150,14 +196,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function handlePressStart() {
-    if (gameStarted) return;
+  function handlePressStart(e) {
+    if (currentScreenName !== 'start') return;
+
+    if (window.AudioSystem && window.AudioSystem.play) {
+      window.AudioSystem.play('click');
+    }
 
     if (isMultiplayerActive) {
-      // In multiplayer, ONLY the Host can trigger the splash screen tap
-      if (!Multiplayer.isHost) return;
-
-      // Host broadcasts signal to Guest device
       if (Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
@@ -170,9 +216,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     openMenuScreen();
   }
 
+  // GLOBAL TAP & CLICK LISTENERS (Guarantees splash screen responds to tap anywhere)
   if (screenStart) {
     screenStart.addEventListener('click', handlePressStart);
+    screenStart.addEventListener('pointerdown', handlePressStart);
   }
+  document.addEventListener('click', (e) => {
+    if (currentScreenName === 'start') {
+      handlePressStart(e);
+    }
+  });
   window.addEventListener('keydown', handlePressStart);
 
   if (btnFight) {
@@ -189,7 +242,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       }
 
-      // Broadcast fight start to Guest
       if (isMultiplayerActive && Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
@@ -198,6 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
+      currentScreenName = 'battle';
       if (screenMenu) screenMenu.classList.add('hidden');
 
       if (window.BattleSystem) {
@@ -219,6 +272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
+      currentScreenName = 'battle';
       const selections = MenuSystem.getSelections();
       if (screenWinner) screenWinner.classList.add('hidden');
 
@@ -241,6 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
+      currentScreenName = 'menu';
       if (screenWinner) screenWinner.classList.add('hidden');
       if (screenMenu) screenMenu.classList.remove('hidden');
       MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
@@ -253,6 +308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function showWinner(winner) {
+    currentScreenName = 'winner';
     const winnerFlagImg = document.getElementById('winner-flag-img');
     const winnerName = document.getElementById('winner-name');
     const winnerHp = document.getElementById('winner-hp');
