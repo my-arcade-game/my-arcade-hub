@@ -14,6 +14,12 @@ var MenuSystem = (() => {
     updateUI();
   }
 
+  function setMultiplayerState(active, hostState) {
+    isMultiplayer = active;
+    isHost = hostState;
+    updateUI();
+  }
+
   function renderGrid() {
     const grid = document.getElementById('country-grid');
     if (!grid) return;
@@ -48,17 +54,19 @@ var MenuSystem = (() => {
     updateUI();
   }
 
-  function setSelection(slot, country) {
+  function setSelection(slot, country, playAudio = true) {
     if (slot === 'p1') {
       selectedP1 = country;
     } else if (slot === 'p2') {
       selectedP2 = country;
     }
 
-    if (country && window.AudioSystem && window.AudioSystem.playCountrySound) {
-      window.AudioSystem.playCountrySound(country.id);
-    } else if (window.AudioSystem && window.AudioSystem.play) {
-      window.AudioSystem.play('click');
+    if (playAudio) {
+      if (country && window.AudioSystem && window.AudioSystem.playCountrySound) {
+        window.AudioSystem.playCountrySound(country.id);
+      } else if (window.AudioSystem && window.AudioSystem.play) {
+        window.AudioSystem.play('click');
+      }
     }
 
     updateUI();
@@ -66,44 +74,38 @@ var MenuSystem = (() => {
 
   function selectCountry(country) {
     if (isMultiplayer) {
-      // 2-Device Online Mode: Host controls P1, Guest controls P2
+      // 2-Device Online Mode: Host picks P1, Guest picks P2
       const targetSlot = isHost ? 'p1' : 'p2';
       const currentSelection = isHost ? selectedP1 : selectedP2;
 
-      // Toggle selection off if clicking the already selected country
       const newCountry = (currentSelection && currentSelection.id === country.id) ? null : country;
       
-      setSelection(targetSlot, newCountry);
+      // Play sound locally once
+      setSelection(targetSlot, newCountry, true);
 
-      // Trigger realtime broadcast hook to update the other device
       if (window.onLocalSelectionChange) {
         window.onLocalSelectionChange(targetSlot, newCountry ? newCountry.id : null);
       }
     } else {
       // Single-Player / Local 1-Device Mode
       if (!selectedP1) {
-        selectedP1 = country;
-        if (window.AudioSystem && window.AudioSystem.playCountrySound) {
-          window.AudioSystem.playCountrySound(country.id);
-        }
+        setSelection('p1', country, true);
       } else if (!selectedP2 && country !== selectedP1) {
-        selectedP2 = country;
-        if (window.AudioSystem && window.AudioSystem.playCountrySound) {
-          window.AudioSystem.playCountrySound(country.id);
-        }
+        setSelection('p2', country, true);
       } else if (country === selectedP1) {
         selectedP1 = selectedP2;
         selectedP2 = null;
         if (window.AudioSystem && window.AudioSystem.play) {
           window.AudioSystem.play('click');
         }
+        updateUI();
       } else if (country === selectedP2) {
         selectedP2 = null;
         if (window.AudioSystem && window.AudioSystem.play) {
           window.AudioSystem.play('click');
         }
+        updateUI();
       }
-      updateUI();
     }
   }
 
@@ -147,7 +149,6 @@ var MenuSystem = (() => {
     });
 
     if (btnFight) {
-      // In online mode, only Host can press FIGHT once both P1 and P2 are chosen
       const canStart = selectedP1 && selectedP2 && (!isMultiplayer || isHost);
       if (canStart) {
         btnFight.style.opacity = '1';
@@ -165,8 +166,7 @@ var MenuSystem = (() => {
     return { p1: selectedP1, p2: selectedP2 };
   }
 
-  // Exposed methods including setSelection so external network scripts can mirror selections
-  return { init, renderGrid, updateUI, setSelection, getSelections };
+  return { init, setMultiplayerState, renderGrid, updateUI, setSelection, getSelections };
 })();
 
 function handleCardImgError(imgElement, countryId) {
@@ -194,6 +194,5 @@ function handleCardImgError(imgElement, countryId) {
   }
 }
 
-// Global attachment
 window.MenuSystem = MenuSystem;
 window.handleCardImgError = handleCardImgError;
