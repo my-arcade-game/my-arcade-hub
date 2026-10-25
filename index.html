@@ -95,7 +95,7 @@
             playerCount.innerText = players.length;
         };
 
-        // When Host selects a game, everyone navigates there simultaneously
+        // Triggered via broadcast event for all connected clients (including Host)
         Multiplayer.onGameStart = (gameUrl) => {
             window.location.href = gameUrl;
         };
@@ -118,10 +118,9 @@
 
         // Attach event listeners to all Play buttons (Host only)
         document.querySelectorAll('.play-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 const gamePath = e.target.getAttribute('data-url');
-                // The Host broadcasts this, which triggers Multiplayer.onGameStart for everyone
-                Multiplayer.broadcastStartGame(gamePath);
+                await Multiplayer.broadcastStartGame(gamePath);
             });
         });
     </script>

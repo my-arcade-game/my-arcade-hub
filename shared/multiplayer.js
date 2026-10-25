@@ -46,6 +46,10 @@ export const Multiplayer = {
             return false;
         }
 
+        // Update URL bar for host
+        const newUrl = window.location.pathname + '?room=' + this.roomCode;
+        window.history.replaceState(null, '', newUrl);
+
         await this.subscribeToRoom();
         return true;
     },
@@ -73,8 +77,12 @@ export const Multiplayer = {
     async subscribeToRoom() {
         if (this.channel) supabase.removeChannel(this.channel);
 
+        // Enable broadcast: { self: true } so host receives start signal as well
         this.channel = supabase.channel(`room:${this.roomCode}`, {
-            config: { presence: { key: this.myId } }
+            config: { 
+                presence: { key: this.myId },
+                broadcast: { self: true }
+            }
         });
 
         this.channel
@@ -84,7 +92,12 @@ export const Multiplayer = {
                 if (this.onPlayersUpdate) this.onPlayersUpdate(this.players);
             })
             .on('broadcast', { event: 'start_game' }, (payload) => {
-                if (this.onGameStart) this.onGameStart(payload.payload.gameUrl);
+                const gameUrl = payload.payload.gameUrl;
+                if (this.onGameStart) {
+                    this.onGameStart(gameUrl);
+                } else {
+                    window.location.href = gameUrl;
+                }
             })
             .subscribe(async (status) => {
                 if (status === 'SUBSCRIBED') {
@@ -93,10 +106,12 @@ export const Multiplayer = {
             });
     },
 
-    broadcastStartGame(gamePath) {
+    async broadcastStartGame(gamePath) {
         if (!this.isHost || !this.channel) return;
         const gameUrl = `${gamePath}?room=${this.roomCode}`;
-        this.channel.send({
+        
+        // Await websocket broadcast transmission before proceeding
+        await this.channel.send({
             type: 'broadcast',
             event: 'start_game',
             payload: { gameUrl }
