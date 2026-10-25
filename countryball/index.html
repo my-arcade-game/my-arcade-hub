@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Nation Battle Arcade</title>
+  <!-- Load Supabase CDN for Realtime Multiplayer support -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -481,7 +483,7 @@
   <div id="screen-start" class="screen">
     <div style="text-align:center; margin-top: 100px;">
       <h1 style="font-size: 28px; letter-spacing: 2px;">COUNTRYBALL<br><span style="color:#ffe600; font-size:34px;">ARENA</span></h1>
-      <div style="font-size: 12px; color: #8e95b7; margin-top: 10px; font-weight: bold;">2D ARCADE WAR</div>
+      <div id="mode-badge" style="font-size: 12px; color: #8e95b7; margin-top: 10px; font-weight: bold;">2D ARCADE WAR</div>
     </div>
 
     <div class="press-start">PRESS ANY BUTTON</div>
@@ -538,7 +540,9 @@
 <script src="js/menu.js"></script>
 <script src="js/passive.js"></script>
 <script src="js/battle.js"></script>
-<script src="js/main.js"></script>
+
+<!-- MAIN MULTIPLAYER & GAME ENGINE MODULE -->
+<script type="module" src="js/main.js"></script>
 
 <!-- ROBUST MOBILE TOUCH AUDIO UNLOCKER -->
 <script>

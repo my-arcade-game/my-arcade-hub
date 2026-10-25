@@ -1,6 +1,7 @@
-document.addEventListener('DOMContentLoaded', () => {
-  MenuSystem.init();
+// /countryball/js/main.js
+import { Multiplayer } from '../shared/multiplayer.js';
 
+document.addEventListener('DOMContentLoaded', async () => {
   const screenStart = document.getElementById('screen-start');
   const screenMenu = document.getElementById('screen-menu');
   const screenWinner = document.getElementById('screen-winner');
@@ -11,8 +12,89 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnFight = document.getElementById('btn-fight');
   const btnRematch = document.getElementById('btn-rematch');
   const btnSelect = document.getElementById('btn-select');
+  const modeBadge = document.getElementById('mode-badge');
 
   let gameStarted = false;
+  let isMultiplayerActive = false;
+
+  // 1. DUAL-MODE INITIALIZATION (Multiplayer via URL room vs Local Single-Player)
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomCode = urlParams.get('room');
+
+  if (roomCode) {
+    await Multiplayer.init();
+    isMultiplayerActive = true;
+
+    if (modeBadge) {
+      modeBadge.innerText = `ROOM: ${Multiplayer.roomCode} | ${Multiplayer.isHost ? 'P1 (HOST)' : 'P2 (GUEST)'}`;
+      modeBadge.style.color = Multiplayer.isHost ? '#00f0ff' : '#ff0055';
+    }
+
+    // Attach Realtime broadcast hooks for online sync
+    if (Multiplayer.channel) {
+      Multiplayer.channel.on('broadcast', { event: 'select_country' }, (payload) => {
+        const { slot, countryId } = payload.payload;
+        const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
+        const country = countryId ? list.find(c => c.id === countryId) : null;
+        if (typeof MenuSystem !== 'undefined' && MenuSystem.setSelection) {
+          MenuSystem.setSelection(slot, country);
+        }
+      });
+
+      Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
+        const { p1Id, p2Id } = payload.payload;
+        const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
+        const p1 = list.find(c => c.id === p1Id);
+        const p2 = list.find(c => c.id === p2Id);
+
+        if (p1 && p2) {
+          if (screenMenu) screenMenu.classList.add('hidden');
+          setRandomBackground();
+          if (window.BattleSystem) {
+            BattleSystem.start(p1, p2, (winner) => {
+              showWinner(winner);
+            });
+          }
+        }
+      });
+
+      Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, () => {
+        const selections = MenuSystem.getSelections();
+        if (screenWinner) screenWinner.classList.add('hidden');
+        if (window.BattleSystem) {
+          setRandomBackground();
+          BattleSystem.start(selections.p1, selections.p2, (winner) => {
+            showWinner(winner);
+          });
+        }
+      });
+
+      Multiplayer.channel.on('broadcast', { event: 'select_again' }, () => {
+        if (screenWinner) screenWinner.classList.add('hidden');
+        if (screenMenu) screenMenu.classList.remove('hidden');
+        MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
+      });
+    }
+  } else {
+    if (modeBadge) {
+      modeBadge.innerText = 'SOLO / LOCAL PLAY';
+      modeBadge.style.color = '#05ffa1';
+    }
+  }
+
+  // Initialize MenuSystem with current game mode configuration
+  MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
+
+  // Hook triggered when a player selects a country locally in online mode
+  window.onLocalSelectionChange = (slot, countryId) => {
+    if (isMultiplayerActive && Multiplayer.channel) {
+      Multiplayer.channel.send({
+        type: 'broadcast',
+        event: 'select_country',
+        payload: { slot, countryId }
+      });
+    }
+  };
 
   function setRandomBackground() {
     const bgImages = [
@@ -74,6 +156,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
+      // Broadcast start signal to Guest device if playing online
+      if (isMultiplayerActive && Multiplayer.channel) {
+        Multiplayer.channel.send({
+          type: 'broadcast',
+          event: 'start_game_battle',
+          payload: { p1Id: selections.p1.id, p2Id: selections.p2.id }
+        });
+      }
+
       if (screenMenu) screenMenu.classList.add('hidden');
 
       if (window.BattleSystem) {
@@ -87,6 +178,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
+      // Broadcast rematch signal to connected player if playing online
+      if (isMultiplayerActive && Multiplayer.channel) {
+        Multiplayer.channel.send({
+          type: 'broadcast',
+          event: 'rematch_battle',
+          payload: {}
+        });
+      }
+
       const selections = MenuSystem.getSelections();
       if (screenWinner) screenWinner.classList.add('hidden');
 
@@ -101,9 +201,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnSelect) {
     btnSelect.addEventListener('click', () => {
+      // Broadcast reset signal to connected player if playing online
+      if (isMultiplayerActive && Multiplayer.channel) {
+        Multiplayer.channel.send({
+          type: 'broadcast',
+          event: 'select_again',
+          payload: {}
+        });
+      }
+
       if (screenWinner) screenWinner.classList.add('hidden');
       if (screenMenu) screenMenu.classList.remove('hidden');
-      MenuSystem.init();
+      MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
       if (window.AudioSystem && window.AudioSystem.playVoice) {
         window.AudioSystem.playVoice('choose_fighter', () => {
           if (bannerOverlay) bannerOverlay.classList.remove('show');
