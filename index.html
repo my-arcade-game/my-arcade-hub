@@ -1,315 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  
-  <!-- Inline Favicon -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕹️</text></svg>">
-  
-  <title>Side Project Arcade</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: pan-y;
-    }
-
-    html, body {
-      width: 100vw;
-      height: 100dvh;
-      background: #08090f;
-      color: #fff;
-      font-family: 'Courier New', Courier, monospace;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
-    }
-
-    @keyframes rgbGlow {
-      0% { border-color: #ff0055; box-shadow: 0 0 25px rgba(255, 0, 85, 0.5); }
-      25% { border-color: #00f0ff; box-shadow: 0 0 25px rgba(0, 240, 255, 0.5); }
-      50% { border-color: #05ffa1; box-shadow: 0 0 25px rgba(5, 255, 161, 0.5); }
-      75% { border-color: #ffe600; box-shadow: 0 0 25px rgba(255, 230, 0, 0.5); }
-      100% { border-color: #ff0055; box-shadow: 0 0 25px rgba(255, 0, 85, 0.5); }
-    }
-
-    /* Responsive Mobile Scaling Fix */
-    #hub-container {
-      position: relative;
-      width: min(360px, 100vw, calc(100dvh * (9 / 16)));
-      height: min(640px, 100dvh, calc(100vw * (16 / 9)));
-      aspect-ratio: 9 / 16;
-      background: #121420;
-      border: 4px solid #ff0055;
-      border-radius: 12px;
-      overflow-y: auto;
-      overflow-x: hidden;
-      animation: rgbGlow 6s linear infinite;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      gap: 12px;
-      padding: 16px 14px;
-      -webkit-overflow-scrolling: touch;
-      touch-action: pan-y;
-      scrollbar-width: thin;
-      scrollbar-color: #ff0055 #0d0f18;
-    }
-
-    /* HEADER */
-    .header {
-      text-align: center;
-      margin-top: 4px;
-      flex-shrink: 0;
-    }
-
-    .badge {
-      font-size: 10px;
-      font-weight: bold;
-      color: #00f0ff;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      background: rgba(0, 240, 255, 0.1);
-      padding: 4px 10px;
-      border-radius: 20px;
-      border: 1px solid rgba(0, 240, 255, 0.3);
-      display: inline-block;
-      margin-bottom: 6px;
-    }
-
-    h1 {
-      font-size: 24px;
-      color: #ffe600;
-      text-transform: uppercase;
-      text-shadow: 2px 2px #ff0055;
-      font-weight: 900;
-      letter-spacing: 1px;
-    }
-
-    .sub-title {
-      font-size: 11px;
-      color: #8e95b7;
-      margin-top: 4px;
-      font-weight: bold;
-    }
-
-    /* GAME LIST (SCROLLABLE) */
-    .game-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      margin: 4px 0;
-      flex: 1;
-      max-height: 330px;
-      overflow-y: auto;
-      overflow-x: hidden;
-      padding-right: 4px;
-      -webkit-overflow-scrolling: touch;
-      touch-action: pan-y;
-      scrollbar-width: thin;
-      scrollbar-color: #ff0055 #0d0f18;
-      flex-shrink: 0;
-    }
-
-    /* Custom Arcade Scrollbar */
-    .game-list::-webkit-scrollbar,
-    #hub-container::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .game-list::-webkit-scrollbar-track,
-    #hub-container::-webkit-scrollbar-track {
-      background: #0d0f18;
-      border-radius: 4px;
-    }
-
-    .game-list::-webkit-scrollbar-thumb,
-    #hub-container::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, #ff0055 0%, #00f0ff 100%);
-      border-radius: 4px;
-      box-shadow: 0 0 8px #ff0055;
-    }
-
-    .game-list::-webkit-scrollbar-thumb:hover,
-    #hub-container::-webkit-scrollbar-thumb:hover {
-      background: #ffe600;
-    }
-
-    .game-card {
-      background: #1c2035;
-      border: 2px solid #353b5e;
-      border-radius: 10px;
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: inherit;
-      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-      cursor: pointer;
-      flex-shrink: 0;
-      touch-action: pan-y;
-    }
-
-    .game-card:active {
-      transform: scale(0.98);
-    }
-
-    .game-card.countryball {
-      border-color: #ff0055;
-    }
-    .game-card.countryball:active {
-      box-shadow: 0 0 15px rgba(255, 0, 85, 0.6);
-    }
-
-    .game-card.earth {
-      border-color: #05ffa1;
-    }
-    .game-card.earth:active {
-      box-shadow: 0 0 15px rgba(5, 255, 161, 0.6);
-    }
-
-    .game-icon {
-      font-size: 32px;
-      width: 50px;
-      height: 50px;
-      background: rgba(0, 0, 0, 0.4);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .game-info {
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .game-title {
-      font-size: 15px;
-      font-weight: bold;
-      color: #fff;
-      text-transform: uppercase;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .game-desc {
-      font-size: 10px;
-      color: #8e95b7;
-      margin-top: 3px;
-      line-height: 1.3;
-    }
-
-    .play-btn {
-      font-size: 11px;
-      font-weight: bold;
-      color: #000;
-      padding: 6px 12px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      flex-shrink: 0;
-    }
-
-    .game-card.countryball .play-btn {
-      background: #ff0055;
-      color: #fff;
-    }
-
-    .game-card.earth .play-btn {
-      background: #05ffa1;
-      color: #000;
-    }
-
-    /* FOOTER */
-    .footer {
-      text-align: center;
-      margin-top: auto;
-      margin-bottom: 4px;
-      flex-shrink: 0;
-    }
-
-    .social-links {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-
-    .social-btn {
-      font-size: 11px;
-      color: #00f0ff;
-      text-decoration: none;
-      background: rgba(0, 240, 255, 0.1);
-      border: 1px solid rgba(0, 240, 255, 0.3);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-weight: bold;
-      transition: background 0.2s;
-    }
-
-    .social-btn:active {
-      background: rgba(0, 240, 255, 0.3);
-    }
-
-    .footer-text {
-      font-size: 10px;
-      color: #555d88;
-      font-weight: bold;
-      letter-spacing: 0.5px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Arcade Hub</title>
+    <!-- Load Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 2rem; }
+        .container { max-width: 600px; margin: 0 auto; background: #16213e; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        button { background: #0f3460; color: white; border: none; padding: 10px 20px; font-size: 1.2rem; cursor: pointer; border-radius: 5px; margin: 10px; }
+        button:hover { background: #e94560; }
+        input { padding: 10px; font-size: 1.2rem; border-radius: 5px; border: none; text-align: center; margin-bottom: 10px; }
+        .hidden { display: none; }
+        .game-card { border: 2px solid #0f3460; margin: 15px 0; padding: 15px; border-radius: 8px; }
+        #room-info { background: #e94560; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-weight: bold; }
+    </style>
 </head>
 <body>
 
-<div id="hub-container">
-  <!-- HEADER -->
-  <div class="header">
-    <div class="badge">Side Projects Hub</div>
-    <h1>SELECT A GAME</h1>
-    <div class="sub-title">Tap a game below to play immediately</div>
-  </div>
+    <div class="container">
+        <h1>My Arcade Hub</h1>
 
-  <!-- GAME SELECTION CARDS -->
-  <div class="game-list">
-    <!-- Game 1: Countryball Arena -->
-    <a href="./countryball/index.html" class="game-card countryball">
-      <div class="game-icon">⚔️</div>
-      <div class="game-info">
-        <div class="game-title">Countryball Arena</div>
-        <div class="game-desc">2D Arcade War featuring unique skills & country balls.</div>
-      </div>
-      <div class="play-btn">PLAY</div>
-    </a>
+        <!-- LOBBY SCREEN: Shown first -->
+        <div id="lobby-screen">
+            <h2>Multiplayer Lobby</h2>
+            <button id="btn-create">Create Room (Host)</button>
+            <hr style="border-color: #0f3460; margin: 20px 0;">
+            <input type="text" id="room-input" placeholder="Enter 6-Letter Code" maxlength="6">
+            <br>
+            <button id="btn-join">Join Room</button>
+        </div>
 
-    <!-- Game 2: Earth Detective -->
-    <a href="./earth-detective/index.html" class="game-card earth">
-      <div class="game-icon">🌍</div>
-      <div class="game-info">
-        <div class="game-title">Earth Detective</div>
-        <div class="game-desc">Explore locations, solve geography puzzles & find clues.</div>
-      </div>
-      <div class="play-btn">PLAY</div>
-    </a>
-  </div>
+        <!-- ARCADE MENU: Shown only inside a room -->
+        <div id="hub-menu" class="hidden">
+            <div id="room-info">Room Code: <span id="display-code">...</span> | Players: <span id="player-count">1</span>/2</div>
+            
+            <p id="waiting-msg">Waiting for Host to start a game...</p>
 
-  <!-- FOOTER & SOCIALS -->
-  <div class="footer">
-    <div class="social-links">
-      <a href="https://tiktok.com" target="_blank" class="social-btn">📱 TikTok</a>
-      <a href="https://github.com" target="_blank" class="social-btn">💻 GitHub</a>
+            <div id="game-list" class="hidden">
+                <h2>Select a Game</h2>
+                
+                <div class="game-card">
+                    <h3>Countryball Arena</h3>
+                    <p>Automatic battle simulator.</p>
+                    <button class="play-btn" data-url="./countryball/index.html">Play Countryball</button>
+                </div>
+
+                <div class="game-card">
+                    <h3>Earth Detective</h3>
+                    <p>GeoGuessr-style location guessing.</p>
+                    <button class="play-btn" data-url="./earth-detective/index.html">Play Earth Detective</button>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="footer-text">MADE WITH JavaScript • 2026 EDITION</div>
-  </div>
-</div>
 
+    <!-- MAIN LOGIC -->
+    <script type="module">
+        import { Multiplayer } from './shared/multiplayer.js';
+
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const hubMenu = document.getElementById('hub-menu');
+        const displayCode = document.getElementById('display-code');
+        const playerCount = document.getElementById('player-count');
+        const gameList = document.getElementById('game-list');
+        const waitingMsg = document.getElementById('waiting-msg');
+        
+        // Initialize Supabase Auth & check for existing room in URL
+        await Multiplayer.init();
+
+        function showArcade() {
+            lobbyScreen.classList.add('hidden');
+            hubMenu.classList.remove('hidden');
+            displayCode.innerText = Multiplayer.roomCode;
+
+            // Only the Host sees the game selection buttons
+            if (Multiplayer.isHost) {
+                gameList.classList.remove('hidden');
+                waitingMsg.classList.add('hidden');
+            } else {
+                gameList.classList.add('hidden');
+                waitingMsg.classList.remove('hidden');
+            }
+        }
+
+        // If we auto-joined via URL, show the arcade immediately
+        if (Multiplayer.roomCode) {
+            showArcade();
+        }
+
+        // Real-time Event Hooks
+        Multiplayer.onPlayersUpdate = (players) => {
+            playerCount.innerText = players.length;
+        };
+
+        // When Host selects a game, everyone navigates there simultaneously
+        Multiplayer.onGameStart = (gameUrl) => {
+            window.location.href = gameUrl;
+        };
+
+        // UI Event Listeners
+        document.getElementById('btn-create').addEventListener('click', async () => {
+            const success = await Multiplayer.createRoom();
+            if (success) showArcade();
+        });
+
+        document.getElementById('btn-join').addEventListener('click', async () => {
+            const code = document.getElementById('room-input').value.trim();
+            if (code.length === 6) {
+                const success = await Multiplayer.joinRoom(code);
+                if (success) showArcade();
+            } else {
+                alert("Please enter a valid 6-letter room code.");
+            }
+        });
+
+        // Attach event listeners to all Play buttons (Host only)
+        document.querySelectorAll('.play-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const gamePath = e.target.getAttribute('data-url');
+                // The Host broadcasts this, which triggers Multiplayer.onGameStart for everyone
+                Multiplayer.broadcastStartGame(gamePath);
+            });
+        });
+    </script>
 </body>
 </html>
