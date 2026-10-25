@@ -1,5 +1,5 @@
 // /countryball/js/main.js
-import { Multiplayer } from '../shared/multiplayer.js';
+import { Multiplayer } from '../../shared/multiplayer.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const screenStart = document.getElementById('screen-start');
