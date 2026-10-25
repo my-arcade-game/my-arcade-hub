@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let gameStarted = false;
   let isMultiplayerActive = false;
 
-  // 1. DUAL-MODE INITIALIZATION (Multiplayer via URL room vs Local Single-Player)
+  // 1. DUAL-MODE INITIALIZATION
   const urlParams = new URLSearchParams(window.location.search);
   const roomCode = urlParams.get('room');
 
@@ -27,11 +27,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (modeBadge) {
       modeBadge.innerText = `ROOM: ${Multiplayer.roomCode} | ${Multiplayer.isHost ? 'P1 (HOST)' : 'P2 (GUEST)'}`;
-      modeBadge.style.color = Multiplayer.isHost ? '#00f0ff' : '#ff0055';
+      modeBadge.style.color = Multiplayer.isHost ? '#00f2fe' : '#ff0055';
     }
 
     // Attach Realtime broadcast hooks for online sync
     if (Multiplayer.channel) {
+      // Sync opening the fighter selection menu from Host
+      Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
+        openMenuScreen();
+      });
+
       Multiplayer.channel.on('broadcast', { event: 'select_country' }, (payload) => {
         const { slot, countryId } = payload.payload;
         const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
@@ -110,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function handlePressStart() {
+  function openMenuScreen() {
     if (gameStarted) return;
     gameStarted = true;
 
@@ -135,6 +140,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 1200);
       }
     }
+  }
+
+  function handlePressStart() {
+    // In online mode, only Host tap opens the menu for both players
+    if (isMultiplayerActive && !Multiplayer.isHost) return;
+
+    if (isMultiplayerActive && Multiplayer.channel) {
+      Multiplayer.channel.send({
+        type: 'broadcast',
+        event: 'press_start_menu',
+        payload: {}
+      });
+    }
+
+    openMenuScreen();
   }
 
   if (screenStart) {
