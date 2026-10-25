@@ -10,6 +10,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Orbitron:wght@600;800;900&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
     
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
@@ -30,7 +33,8 @@
         <!-- 1. MAIN MENU SCREEN -->
         <div id="main-menu" class="screen">
             <h1 id="ui-title">Earth Detective: Survival</h1>
-            
+            <div id="mode-badge" style="font-size: 11px; color: #00f2fe; margin-bottom: 10px; font-weight: bold;">LOCAL PLAY MODE</div>
+
             <div class="menu-box">
                 <label for="starting-hp" id="ui-hp-label">Starting HP:</label>
                 <input type="number" id="starting-hp" min="1000" max="50000" step="1000" value="10000">
@@ -106,7 +110,7 @@
 
     <!-- SCRIPTS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 
     <!-- MOBILE TOUCH AUDIO UNLOCKER -->
     <script>
