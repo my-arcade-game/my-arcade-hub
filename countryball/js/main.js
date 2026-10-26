@@ -1,5 +1,5 @@
 // ==========================================
-// MAIN.JS - FAIL-SAFE DIRECT MATCH ROUTER
+// MAIN.JS - MULTIPLAYER REMATCH & SYNC FIX
 // ==========================================
 import { Multiplayer } from '../../shared/multiplayer.js';
 
@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let currentScreenName = 'start';
   let isMultiplayerActive = false;
+  let lastMatchFighters = { p1: null, p2: null };
 
   const myRole = () => (Multiplayer.isHost ? 'host' : 'guest');
 
@@ -31,7 +32,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // FAIL-SAFE COUNTRY RESOLVER (PREVENTS GUEST NULL-POINTER STUCK)
   function getCountryById(id) {
     const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
     if (!list || list.length === 0) return null;
@@ -58,13 +58,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (Multiplayer.channel) {
-        // 1. Menu Navigation Sync
         Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, (payload) => {
           if (payload.payload && payload.payload.senderRole === myRole()) return;
           openMenuScreen();
         });
 
-        // 2. Character Selection Sync
         Multiplayer.channel.on('broadcast', { event: 'select_country' }, (payload) => {
           const { slot, countryId, senderRole } = payload.payload;
           if (senderRole === myRole()) return;
@@ -75,30 +73,33 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // 3. START GAME BATTLE (DIRECT FAIL-SAFE TRIGGER)
         Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
           const { p1Id, p2Id, seed, senderRole } = payload.payload;
           if (senderRole === myRole()) return;
-          if (currentScreenName === 'battle') return; // Avoid duplicate triggers
 
           const p1 = getCountryById(p1Id);
           const p2 = getCountryById(p2Id);
           launchMatch(p1, p2, seed);
         });
 
-        // 4. REMATCH BATTLE
-        Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
-          const { seed, senderRole } = payload.payload;
-          if (senderRole === myRole()) return;
-          if (currentScreenName === 'battle') return;
+        // LISTEN FOR GUEST REMATCH REQUEST (HOST ONLY)
+        Multiplayer.channel.on('broadcast', { event: 'request_rematch' }, (payload) => {
+          if (payload.payload && payload.payload.senderRole === myRole()) return;
+          if (Multiplayer.isHost) {
+            triggerRematchExecution();
+          }
+        });
 
-          const selections = MenuSystem.getSelections();
-          const p1 = selections.p1 || getCountryById(null);
-          const p2 = selections.p2 || getCountryById(null);
+        // REMATCH BATTLE SYNC WITH FIGHTER IDS & SEED
+        Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
+          const { p1Id, p2Id, seed, senderRole } = payload.payload;
+          if (senderRole === myRole()) return;
+
+          const p1 = getCountryById(p1Id) || lastMatchFighters.p1;
+          const p2 = getCountryById(p2Id) || lastMatchFighters.p2;
           launchMatch(p1, p2, seed);
         });
 
-        // 5. RE-SELECT MENU
         Multiplayer.channel.on('broadcast', { event: 'select_again' }, (payload) => {
           if (payload.payload && payload.payload.senderRole === myRole()) return;
           currentScreenName = 'menu';
@@ -169,13 +170,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function handlePressStart() {
     if (currentScreenName !== 'start') return;
-
     try {
-      if (window.AudioSystem && window.AudioSystem.play) {
-        window.AudioSystem.play('click');
-      }
+      if (window.AudioSystem && window.AudioSystem.play) window.AudioSystem.play('click');
     } catch (e) {}
-
     sendBroadcast('press_start_menu');
     openMenuScreen();
   }
@@ -189,8 +186,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   window.addEventListener('keydown', handlePressStart);
 
-  // UNIFIED MATCH LAUNCHER
   function launchMatch(p1, p2, matchSeed) {
+    lastMatchFighters = { p1, p2 };
     currentScreenName = 'battle';
     if (screenStart) screenStart.classList.add('hidden');
     if (screenMenu) screenMenu.classList.add('hidden');
@@ -206,7 +203,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // START FIGHT BUTTON (HOST SENDS DUAL BROADCAST)
+  function triggerRematchExecution() {
+    let p1 = lastMatchFighters.p1;
+    let p2 = lastMatchFighters.p2;
+
+    if (!p1 || !p2) {
+      const selections = MenuSystem.getSelections();
+      p1 = selections.p1 || getCountryById(null);
+      p2 = selections.p2 || getCountryById(null);
+    }
+
+    const matchSeed = Math.floor(Math.random() * 2147483647);
+    const rematchPayload = {
+      p1Id: p1.id,
+      p2Id: p2.id,
+      seed: matchSeed
+    };
+
+    if (isMultiplayerActive) {
+      sendBroadcast('rematch_battle', rematchPayload);
+      setTimeout(() => sendBroadcast('rematch_battle', rematchPayload), 300);
+    }
+
+    launchMatch(p1, p2, matchSeed);
+  }
+
   if (btnFight) {
     btnFight.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
@@ -227,9 +248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
 
       if (isMultiplayerActive && Multiplayer.isHost) {
-        // Send primary broadcast immediately
         sendBroadcast('start_game_battle', startPayload);
-        // Send backup retry broadcast after 300ms to guarantee packet delivery
         setTimeout(() => sendBroadcast('start_game_battle', startPayload), 300);
       }
 
@@ -237,19 +256,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // REMATCH BUTTON
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
-      const selections = MenuSystem.getSelections();
-      const matchSeed = Math.floor(Math.random() * 2147483647);
-      const rematchPayload = { seed: matchSeed };
+      try {
+        if (window.AudioSystem && typeof window.AudioSystem.play === 'function') {
+          window.AudioSystem.play('click');
+        }
+      } catch (e) {}
 
-      if (isMultiplayerActive && Multiplayer.isHost) {
-        sendBroadcast('rematch_battle', rematchPayload);
-        setTimeout(() => sendBroadcast('rematch_battle', rematchPayload), 300);
+      if (isMultiplayerActive && !Multiplayer.isHost) {
+        sendBroadcast('request_rematch');
+      } else {
+        triggerRematchExecution();
       }
-
-      launchMatch(selections.p1, selections.p2, matchSeed);
     });
   }
 
