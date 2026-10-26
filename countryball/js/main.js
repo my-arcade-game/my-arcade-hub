@@ -1,4 +1,6 @@
-// /countryball/js/main.js
+// ==========================================
+// MAIN.JS - MULTIPLAYER ROUTING & SEED SYNCHRONIZATION
+// ==========================================
 import { Multiplayer } from '../../shared/multiplayer.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -16,6 +18,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let currentScreenName = 'start';
   let isMultiplayerActive = false;
+
+  // Safe Broadcast Helper to prevent lost messages over WebSockets
+  function sendBroadcastSafely(eventName, payload) {
+    if (isMultiplayerActive && Multiplayer.channel && Multiplayer.channel.state === 'joined') {
+      Multiplayer.channel.send({
+        type: 'broadcast',
+        event: eventName,
+        payload: payload
+      });
+    } else if (isMultiplayerActive && Multiplayer.channel) {
+      setTimeout(() => {
+        Multiplayer.channel.send({
+          type: 'broadcast',
+          event: eventName,
+          payload: payload
+        });
+      }, 350);
+    }
+  }
 
   // 1. DUAL-MODE INITIALIZATION
   const urlParams = new URLSearchParams(window.location.search);
@@ -35,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         MenuSystem.init({ active: true, isHost: Multiplayer.isHost });
       }
 
-      // Setup Broadcast Listeners
+      // Realtime Broadcast Listener Setup
       if (Multiplayer.channel) {
         Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
           openMenuScreen();
@@ -69,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // REMATCH WITH NEW SYNCHRONIZED SEED
+        // REMATCH BATTLE WITH SYNCHRONIZED SEED
         Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
           const { seed } = payload.payload;
           currentScreenName = 'battle';
@@ -104,13 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   window.onLocalSelectionChange = (slot, countryId) => {
-    if (isMultiplayerActive && Multiplayer.channel) {
-      Multiplayer.channel.send({
-        type: 'broadcast',
-        event: 'select_country',
-        payload: { slot, countryId }
-      });
-    }
+    sendBroadcastSafely('select_country', { slot, countryId });
   };
 
   function setRandomBackground(seed = Math.floor(Math.random() * 10000)) {
@@ -142,14 +157,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       bannerText.className = 'banner-choose';
       bannerOverlay.classList.add('show');
 
-      if (window.AudioSystem && window.AudioSystem.playVoice) {
-        window.AudioSystem.playVoice('choose_fighter', () => {
-          bannerOverlay.classList.remove('show');
-        });
-      } else {
-        setTimeout(() => {
-          bannerOverlay.classList.remove('show');
-        }, 1200);
+      try {
+        if (window.AudioSystem && window.AudioSystem.playVoice) {
+          window.AudioSystem.playVoice('choose_fighter', () => {
+            bannerOverlay.classList.remove('show');
+          });
+        } else {
+          setTimeout(() => bannerOverlay.classList.remove('show'), 1200);
+        }
+      } catch (e) {
+        setTimeout(() => bannerOverlay.classList.remove('show'), 1200);
       }
     }
   }
@@ -157,18 +174,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   function handlePressStart(e) {
     if (currentScreenName !== 'start') return;
 
-    if (window.AudioSystem && window.AudioSystem.play) {
-      window.AudioSystem.play('click');
-    }
+    try {
+      if (window.AudioSystem && window.AudioSystem.play) {
+        window.AudioSystem.play('click');
+      }
+    } catch (e) {}
 
-    if (isMultiplayerActive && Multiplayer.channel) {
-      Multiplayer.channel.send({
-        type: 'broadcast',
-        event: 'press_start_menu',
-        payload: {}
-      });
-    }
-
+    sendBroadcastSafely('press_start_menu', {});
     openMenuScreen();
   }
 
@@ -177,9 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     screenStart.addEventListener('pointerdown', handlePressStart);
   }
   document.addEventListener('click', (e) => {
-    if (currentScreenName === 'start') {
-      handlePressStart(e);
-    }
+    if (currentScreenName === 'start') handlePressStart(e);
   });
   window.addEventListener('keydown', handlePressStart);
 
@@ -188,21 +198,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const selections = MenuSystem.getSelections();
       if (!selections.p1 || !selections.p2) return;
 
-      if (window.AudioSystem) {
-        if (typeof window.AudioSystem.stopCountrySound === 'function') window.AudioSystem.stopCountrySound();
-        if (typeof window.AudioSystem.play === 'function') window.AudioSystem.play('click');
-      }
+      try {
+        if (window.AudioSystem) {
+          if (typeof window.AudioSystem.stopCountrySound === 'function') window.AudioSystem.stopCountrySound();
+          if (typeof window.AudioSystem.play === 'function') window.AudioSystem.play('click');
+        }
+      } catch (e) {}
 
-      // GENERATE A SEED FOR DETERMINISTIC SIMULATION
+      // Synchronized Deterministic Seed Generation
       const matchSeed = Math.floor(Math.random() * 2147483647);
 
-      if (isMultiplayerActive && Multiplayer.channel) {
-        Multiplayer.channel.send({
-          type: 'broadcast',
-          event: 'start_game_battle',
-          payload: { p1Id: selections.p1.id, p2Id: selections.p2.id, seed: matchSeed }
-        });
-      }
+      sendBroadcastSafely('start_game_battle', {
+        p1Id: selections.p1.id,
+        p2Id: selections.p2.id,
+        seed: matchSeed
+      });
 
       currentScreenName = 'battle';
       if (screenMenu) screenMenu.classList.add('hidden');
@@ -220,13 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnRematch.addEventListener('click', () => {
       const matchSeed = Math.floor(Math.random() * 2147483647);
 
-      if (isMultiplayerActive && Multiplayer.channel) {
-        Multiplayer.channel.send({
-          type: 'broadcast',
-          event: 'rematch_battle',
-          payload: { seed: matchSeed }
-        });
-      }
+      sendBroadcastSafely('rematch_battle', { seed: matchSeed });
 
       currentScreenName = 'battle';
       const selections = MenuSystem.getSelections();
@@ -243,23 +247,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (btnSelect) {
     btnSelect.addEventListener('click', () => {
-      if (isMultiplayerActive && Multiplayer.channel) {
-        Multiplayer.channel.send({
-          type: 'broadcast',
-          event: 'select_again',
-          payload: {}
-        });
-      }
+      sendBroadcastSafely('select_again', {});
 
       currentScreenName = 'menu';
       if (screenWinner) screenWinner.classList.add('hidden');
       if (screenMenu) screenMenu.classList.remove('hidden');
       MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
-      if (window.AudioSystem && window.AudioSystem.playVoice) {
-        window.AudioSystem.playVoice('choose_fighter', () => {
-          if (bannerOverlay) bannerOverlay.classList.remove('show');
-        });
-      }
+
+      try {
+        if (window.AudioSystem && window.AudioSystem.playVoice) {
+          window.AudioSystem.playVoice('choose_fighter', () => {
+            if (bannerOverlay) bannerOverlay.classList.remove('show');
+          });
+        }
+      } catch (e) {}
     });
   }
 
@@ -284,8 +285,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (screenWinner) screenWinner.classList.remove('hidden');
 
-    if (window.AudioSystem && typeof window.AudioSystem.playCountrySound === 'function') {
-      window.AudioSystem.playCountrySound(winner.config.id);
-    }
+    try {
+      if (window.AudioSystem && typeof window.AudioSystem.playCountrySound === 'function') {
+        window.AudioSystem.playCountrySound(winner.config.id);
+      }
+    } catch (e) {}
   }
 });

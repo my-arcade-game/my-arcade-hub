@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - DETERMINISTIC SEEDED SIMULATION ENGINE
+// BATTLE.JS - DETERMINISTIC SEEDED SIMULATION ENGINE & SAFE CANVAS RENDERER
 // ==========================================
 
 var BattleSystem = (() => {
@@ -25,7 +25,7 @@ var BattleSystem = (() => {
   let suddenDeathTriggered = false;
   let rgbHue = 0;
 
-  // MULBERRY32 SEEDED PRNG ENGINE
+  // MULBERRY32 DETERMINISTIC SEEDED PRNG ENGINE
   let currentSeed = 123456789;
   function setSeed(seed) {
     currentSeed = seed || 123456789;
@@ -45,7 +45,7 @@ var BattleSystem = (() => {
   let shakeTimer = 0;
   let shakeIntensity = 0;
 
-  // EMOJI CACHE
+  // HIGH-PERFORMANCE EMOJI CACHE
   const emojiCache = {};
   function drawCachedEmoji(targetCtx, emoji, size) {
     if (!emoji) return;
@@ -196,9 +196,11 @@ var BattleSystem = (() => {
             color: '#05ffa1' 
           }); 
 
-          if (window.AudioSystem && window.AudioSystem.playFile) { 
-            window.AudioSystem.playFile('healspawn.mp3'); 
-          }
+          try {
+            if (window.AudioSystem && window.AudioSystem.playFile) { 
+              window.AudioSystem.playFile('healspawn.mp3'); 
+            }
+          } catch(e) {}
         } else {
           this.hp = 0; 
           this.lives = 0; 
@@ -287,7 +289,9 @@ var BattleSystem = (() => {
       if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
       if (this.y + margin > canvas.height - 20) { this.y = canvas.height - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
 
-      if (bounced && !isGameOver && window.AudioSystem) AudioSystem.play('bounce'); 
+      try {
+        if (bounced && !isGameOver && window.AudioSystem) AudioSystem.play('bounce'); 
+      } catch(e) {}
 
       const weaponSpeedBoost = matchSec >= 60 ? 1.2 : 1.0;
       this.weaponAngle += this.weaponSpeed * weaponSpeedBoost; 
@@ -458,6 +462,7 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
+  // SAFE INTRO BANNER GUARANTEES FIGHT UNLOCK EVEN IF AUDIO FAILS
   function triggerIntroBanner() {
     isIntroSequence = true; 
     const overlay = document.getElementById('banner-overlay');
@@ -476,12 +481,13 @@ var BattleSystem = (() => {
 
     text.innerHTML = 'READY...';
     text.className = 'banner-ready';
-    text.style.color = '';
     overlay.classList.add('show');
 
-    if (window.AudioSystem && window.AudioSystem.playVoice) {
-      window.AudioSystem.playVoice('fight_start');
-    }
+    try {
+      if (window.AudioSystem && window.AudioSystem.playVoice) {
+        window.AudioSystem.playVoice('fight_start');
+      }
+    } catch (e) {}
 
     setTimeout(() => {
       text.innerHTML = 'FIGHT!';
@@ -490,7 +496,7 @@ var BattleSystem = (() => {
 
       setTimeout(() => {
         overlay.classList.remove('show');
-        isIntroSequence = false; 
+        isIntroSequence = false; // Unlocks battle loop unconditionally
       }, 1600);
     }, 1400);
   }
@@ -515,9 +521,11 @@ var BattleSystem = (() => {
 
     triggerShake(24, 12);
 
-    if (window.AudioSystem && window.AudioSystem.playUltiSound) {
-      window.AudioSystem.playUltiSound();
-    }
+    try {
+      if (window.AudioSystem && window.AudioSystem.playUltiSound) {
+        window.AudioSystem.playUltiSound();
+      }
+    } catch (e) {}
 
     if (window.bannerTimeout) clearTimeout(window.bannerTimeout);
     window.bannerTimeout = setTimeout(() => {
@@ -555,7 +563,7 @@ var BattleSystem = (() => {
       });
     }
 
-    if (window.AudioSystem) AudioSystem.playFile('slice.mp3');
+    try { if (window.AudioSystem) AudioSystem.playFile('slice.mp3'); } catch(e) {}
   }
 
   function spawnBaguetteWalls(ownerBall) {
@@ -586,9 +594,7 @@ var BattleSystem = (() => {
       });
     }
 
-    if (window.AudioSystem && window.AudioSystem.playFile) {
-      window.AudioSystem.playFile('slice.mp3');
-    }
+    try { if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('slice.mp3'); } catch(e) {}
   }
 
   function updateKerisDaggers() {}
@@ -647,7 +653,7 @@ var BattleSystem = (() => {
       owner: ownerBall
     });
     triggerShake(15, 8);
-    if (window.AudioSystem) window.AudioSystem.playFile('boom.mp3');
+    try { if (window.AudioSystem) window.AudioSystem.playFile('boom.mp3'); } catch(e) {}
   }
 
   function spawnSnowVortex(ownerBall, duration = 360) {
@@ -998,7 +1004,7 @@ var BattleSystem = (() => {
         strike.exploded = true;
 
         triggerShake(10, 5);
-        if (window.AudioSystem) window.AudioSystem.playFile('boom.mp3');
+        try { if (window.AudioSystem) window.AudioSystem.playFile('boom.mp3'); } catch(e) {}
 
         balls.forEach(ball => {
           if (ball !== strike.owner && !ball.isInvincible) {
@@ -1406,7 +1412,7 @@ var BattleSystem = (() => {
     });
   }
 
-  // START FUNCTION RECEIVES MATCH SEED
+  // START METHOD INITIALIZES SEED ENGINE AND STARTS BATTLE
   function start(p1Data, p2Data, callback, seed = 123456789) {
     setSeed(seed);
 
@@ -1450,9 +1456,9 @@ var BattleSystem = (() => {
       const winner = balls.find(b => b !== loser) || loser;
 
       triggerShake(20, 10);
-      if (window.AudioSystem) {
-        AudioSystem.play('ko');
-      }
+      try {
+        if (window.AudioSystem) AudioSystem.play('ko');
+      } catch(e) {}
 
       setTimeout(() => {
         if (onBattleComplete) onBattleComplete(winner);
@@ -1510,9 +1516,9 @@ var BattleSystem = (() => {
           if (item.type === 'HP') {
             ball.hp = Math.min(ball.maxHp, ball.hp + 20);
             hitTexts.push({ text: '+20 HP', x: ball.x, y: ball.y - 30, life: 30, color: '#05ffa1' });
-            if (window.AudioSystem && window.AudioSystem.playFile) {
-              window.AudioSystem.playFile('healspawn.mp3');
-            }
+            try {
+              if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('healspawn.mp3');
+            } catch(e) {}
           } else if (item.type === 'ENERGY') {
             if (ball.silenceTimer > 0) {
               hitTexts.push({ text: '🔇 SILENCED!', x: ball.x, y: ball.y - 30, life: 30, color: '#ff0000' });
@@ -1523,15 +1529,15 @@ var BattleSystem = (() => {
           } else if (item.type === 'SHIELD') {
             ball.shieldTimer = 180;
             hitTexts.push({ text: '🛡️ SHIELD!', x: ball.x, y: ball.y - 30, life: 30, color: '#00ffff' });
-            if (window.AudioSystem && window.AudioSystem.playFile) {
-              window.AudioSystem.playFile('shieldspawn.mp3');
-            }
+            try {
+              if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('shieldspawn.mp3');
+            } catch(e) {}
           } else if (item.type === 'DASH') {
             ball.dashTimer = 180;
             hitTexts.push({ text: '💨 DASH!', x: ball.x, y: ball.y - 30, life: 30, color: '#ffaa00' });
-            if (window.AudioSystem && window.AudioSystem.playFile) {
-              window.AudioSystem.playFile('dashspawn.mp3');
-            }
+            try {
+              if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('dashspawn.mp3');
+            } catch(e) {}
           }
           items.splice(i, 1);
         }
@@ -1559,7 +1565,9 @@ var BattleSystem = (() => {
       [b1.vx, b2.vx] = [b2.vx, b1.vx];
       [b1.vy, b2.vy] = [b2.vy, b1.vy];
 
-      if (window.AudioSystem) AudioSystem.play('collide');
+      try {
+        if (window.AudioSystem) AudioSystem.play('collide');
+      } catch(e) {}
     }
 
     checkWeaponHit(b1, b2);
@@ -1601,9 +1609,11 @@ var BattleSystem = (() => {
 
         if (isCrit) triggerShake(10, 6);
 
-        if (window.AudioSystem && window.AudioSystem.playWeaponSound) {
-          window.AudioSystem.playWeaponSound(attacker.config.weapon);
-        }
+        try {
+          if (window.AudioSystem && window.AudioSystem.playWeaponSound) {
+            window.AudioSystem.playWeaponSound(attacker.config.weapon);
+          }
+        } catch(e) {}
 
         hitTexts.push({
           text: isCrit ? `CRIT -${dmg}` : `-${dmg}`,
