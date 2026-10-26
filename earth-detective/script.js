@@ -2,7 +2,6 @@ import { Multiplayer } from '../shared/multiplayer.js';
 
 // --- 1. GAME VARIABLES & STATE ---
 let players = [];
-let currentPlayerIndex = 0;
 let selectedPlayerCount = 2;
 let targetLat = 0;
 let targetLng = 0;
@@ -15,9 +14,13 @@ let opponentMarker = null;
 let actualMarker = null;
 let userLine = null;
 let opponentLine = null;
+let mapPopups = [];
 
 let musicPlaying = false;
 let isAudioUnlocked = false;
+
+// Web Audio API Synthesizer Context for Custom Sound Effects
+let audioCtx = null;
 
 // Dual-Mode Multiplayer State
 let isMultiplayerActive = false;
@@ -54,6 +57,28 @@ const audio = {
 // Sound effect pools
 const bgmTracks = ['bgm_1.mp3', 'bgm_2.mp3'];
 const winTracks = ['win_1.mp3', 'win_2.mp3'];
+
+// Custom Leaflet Icons for P1 (Cyan), P2 (Pink), and Actual Target (Gold Star)
+const p1Icon = L.divIcon({
+    className: 'custom-pin p1-pin',
+    html: '<div class="pin-head p1-head">P1</div><div class="pin-pointer"></div>',
+    iconSize: [30, 42],
+    iconAnchor: [15, 42]
+});
+
+const p2Icon = L.divIcon({
+    className: 'custom-pin p2-pin',
+    html: '<div class="pin-head p2-head">P2</div><div class="pin-pointer"></div>',
+    iconSize: [30, 42],
+    iconAnchor: [15, 42]
+});
+
+const targetIcon = L.divIcon({
+    className: 'custom-pin target-pin',
+    html: '<div class="pin-head target-head">📍</div><div class="pin-pointer target-pointer"></div>',
+    iconSize: [34, 46],
+    iconAnchor: [17, 46]
+});
 
 // --- DUAL MODE & SUPABASE MULTIPLAYER INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -135,15 +160,75 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// --- ROBUST MOBILE AUDIO UNLOCKER & SFX MANAGER ---
+// --- AUDIO SYNTHESIZER FOR MEASUREMENT & DAMAGE IMPACT ---
+function initWebAudio() {
+    if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+            audioCtx = new AudioContextClass();
+        }
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+    }
+}
+
+function playMeasureTicks(durationMs = 1200) {
+    initWebAudio();
+    if (!audioCtx) return;
+
+    const tickCount = 14;
+    const interval = durationMs / tickCount;
+
+    for (let i = 0; i < tickCount; i++) {
+        setTimeout(() => {
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440 + (i * 35), audioCtx.currentTime);
+
+                gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.05);
+            } catch (e) {}
+        }, i * interval);
+    }
+}
+
+function playDamageHitSound() {
+    initWebAudio();
+    if (!audioCtx) return;
+
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.4);
+
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {}
+}
+
 function unlockAllAudio() {
     if (isAudioUnlocked) return;
     isAudioUnlocked = true;
-
-    if (window.AudioContext || window.webkitAudioContext) {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    }
+    initWebAudio();
 
     const allElements = [audio.bgm, audio.ticking, audio.guess, audio.lose, audio.win];
     allElements.forEach(el => {
@@ -355,10 +440,11 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_M
 
 map.on('click', function(e) {
     const myPlayer = players.find(p => p.id === myPlayerId) || players[0];
-    if (myPlayer && myPlayer.currentGuess) return; // Lock pin after guess submission
+    if (myPlayer && myPlayer.currentGuess) return; 
 
     if (userMarker !== null) map.removeLayer(userMarker);
-    userMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
+    const icon = myPlayerId === 1 ? p1Icon : p2Icon;
+    userMarker = L.marker([e.latlng.lat, e.latlng.lng], { icon: icon }).addTo(map);
 });
 
 const WIKIDATA_URL = `https://query.wikidata.org/sparql?query=` + encodeURIComponent(`
@@ -560,7 +646,7 @@ function refreshArenaUIDashboard() {
         
         text.innerText = `${p.hp} HP`;
         const percentage = (p.hp / maxHpSetting) * 100;
-        fill.style.width = `${percentage}%`;
+        fill.style.width = `${Math.max(0, percentage)}%`;
         
         row.classList.remove('dead');
         if (!p.alive) {
@@ -579,6 +665,8 @@ function startSimultaneousRound() {
     if (actualMarker) { map.removeLayer(actualMarker); actualMarker = null; }
     if (userLine) { map.removeLayer(userLine); userLine = null; }
     if (opponentLine) { map.removeLayer(opponentLine); opponentLine = null; }
+    mapPopups.forEach(pop => map.removeLayer(pop));
+    mapPopups = [];
 
     map.setView([20, 0], 2);
 
@@ -687,7 +775,7 @@ function checkAllGuessesSubmitted() {
     }
 }
 
-// EVALUATE ALL GUESSES AT ONCE
+// --- ANIMATED MEASUREMENT & GEOGUESSR DISTANCE HP IMPACT ---
 async function evaluateRoundResults() {
     if (roundEvaluated) return;
     roundEvaluated = true;
@@ -695,50 +783,110 @@ async function evaluateRoundResults() {
     stopRoundClockCountdown();
     document.getElementById('guess-btn').style.display = 'none';
 
+    // 1. Reveal Target Location Pin
     const actualLatLng = [targetLat, targetLng];
-    actualMarker = L.marker(actualLatLng).addTo(map);
+    actualMarker = L.marker(actualLatLng, { icon: targetIcon }).addTo(map);
 
-    let recapMessages = [];
+    let playerStats = [];
     let boundsGroup = [actualLatLng];
 
+    // 2. Plot All Player Pins and Calculate Distances
     players.forEach(p => {
         if (!p.alive) return;
 
         if (p.currentGuess) {
             const pLatLng = [p.currentGuess.lat, p.currentGuess.lng];
             const distMeters = map.distance(pLatLng, actualLatLng);
-            const damage = Math.round(distMeters / 1000);
-            p.hp = Math.max(0, p.hp - damage);
+            const distKm = Math.round(distMeters / 1000);
 
             boundsGroup.push(pLatLng);
 
-            const color = p.id === 1 ? '#00f2fe' : '#ff0055';
-            const line = L.polyline([pLatLng, actualLatLng], { color: color, weight: 3, className: 'animated-line' }).addTo(map);
-
-            if (p.id === myPlayerId) userLine = line;
-            else opponentLine = line;
-
-            if (p.id !== myPlayerId) {
-                opponentMarker = L.marker(pLatLng).addTo(map);
+            const icon = p.id === 1 ? p1Icon : p2Icon;
+            if (p.id !== myPlayerId || !userMarker) {
+                const mk = L.marker(pLatLng, { icon: icon }).addTo(map);
+                if (p.id === myPlayerId) userMarker = mk;
+                else opponentMarker = mk;
             }
 
-            recapMessages.push(`Player ${p.id}: ${Math.round(distMeters / 1000)} km off (-${damage} HP)`);
+            playerStats.push({ player: p, distKm, latLng: pLatLng });
         } else {
-            const penalty = 5000;
-            p.hp = Math.max(0, p.hp - penalty);
-            recapMessages.push(`Player ${p.id}: Time Expired! (-${penalty} HP)`);
+            // Penalty for missed guess: set very high distance
+            playerStats.push({ player: p, distKm: 15000, latLng: null });
         }
-
-        if (p.hp <= 0) p.alive = false;
     });
 
     if (boundsGroup.length > 1) {
-        map.fitBounds(L.latLngBounds(boundsGroup), { padding: [40, 40] });
+        map.fitBounds(L.latLngBounds(boundsGroup), { padding: [50, 50] });
     }
 
+    // Expand map so measurement lines and pins are fully visible
+    if (!isMapExpanded) toggleMapExpand();
+
+    // 3. Trigger Measuring Animation & Measurement SFX
+    playMeasureTicks(1400);
+
+    playerStats.forEach(stat => {
+        if (stat.latLng) {
+            const color = stat.player.id === 1 ? '#00f2fe' : '#ff0055';
+            const line = L.polyline([stat.latLng, actualLatLng], {
+                color: color,
+                weight: 4,
+                dashArray: '8, 8',
+                className: 'animated-line'
+            }).addTo(map);
+
+            if (stat.player.id === myPlayerId) userLine = line;
+            else opponentLine = line;
+
+            // Display distance tooltip on map
+            const midLat = (stat.latLng[0] + targetLat) / 2;
+            const midLng = (stat.latLng[1] + targetLng) / 2;
+            const popup = L.popup({ autoClose: false, closeOnClick: false, className: 'distance-popup' })
+                .setLatLng([midLat, midLng])
+                .setContent(`<b style="color:${color}">P${stat.player.id}:</b> ${stat.distKm.toLocaleString()} km`)
+                .openOn(map);
+            mapPopups.push(popup);
+        }
+    });
+
+    // Wait for measuring lines and audio to complete
+    await new Promise(r => setTimeout(r, 1400));
+
+    // 4. Calculate GeoGuessr Farthest vs Closest HP Damage
+    // Distances: Player with min distance takes 0 damage; player with max distance takes (max - min) damage
+    let damageLog = [];
+    if (playerStats.length >= 2) {
+        playerStats.sort((a, b) => a.distKm - b.distKm);
+        const winnerStat = playerStats[0]; // Shortest distance (closest)
+        const loserStat = playerStats[playerStats.length - 1]; // Farthest distance
+
+        const damageDiff = loserStat.distKm - winnerStat.distKm;
+
+        if (damageDiff > 0) {
+            // Apply damage to loser
+            loserStat.player.hp = Math.max(0, loserStat.player.hp - damageDiff);
+
+            // Animate floating damage popup towards loser's HUD row & shake
+            triggerDamagePopupAndShake(loserStat.player.id, damageDiff);
+
+            damageLog.push(`🎯 Player ${winnerStat.player.id} was closest! (${winnerStat.distKm.toLocaleString()} km)`);
+            damageLog.push(`💥 Player ${loserStat.player.id} takes -${damageDiff.toLocaleString()} HP damage!`);
+        } else {
+            damageLog.push(`⚖️ PERFECT TIE! Both players were equally distant (${winnerStat.distKm.toLocaleString()} km). No damage!`);
+        }
+    } else if (playerStats.length === 1) {
+        damageLog.push(`Player ${playerStats[0].player.id}: ${playerStats[0].distKm.toLocaleString()} km`);
+    }
+
+    playerStats.forEach(s => {
+        if (s.player.hp <= 0) s.player.alive = false;
+    });
+
+    await new Promise(r => setTimeout(r, 600));
     refreshArenaUIDashboard();
 
-    await customAlert(`📍 ROUND RESULTS:\n\n` + recapMessages.join('\n'));
+    // 5. Display Round Results Modal & Transition
+    await customAlert(`📍 ROUND RESULTS:\n\n` + damageLog.join('\n'));
 
     const alivePlayers = players.filter(p => p.alive);
 
@@ -759,5 +907,39 @@ async function evaluateRoundResults() {
         if (isHost || !isMultiplayerActive) {
             loadNewRound();
         }
+    }
+}
+
+// --- POPUP FLOATING DAMAGE NUMBERS & HUD SHAKE EFFECT ---
+function triggerDamagePopupAndShake(targetPlayerId, damageAmount) {
+    const targetRow = document.getElementById(`player-row-${targetPlayerId}`);
+    const overlayContainer = document.getElementById('damage-overlay-container');
+
+    playDamageHitSound();
+
+    if (targetRow) {
+        // Apply HUD Shake effect
+        targetRow.classList.remove('hp-hit-shake');
+        void targetRow.offsetWidth; // Trigger reflow
+        targetRow.classList.add('hp-hit-shake');
+
+        setTimeout(() => targetRow.classList.remove('hp-hit-shake'), 600);
+    }
+
+    if (overlayContainer && targetRow) {
+        const rect = targetRow.getBoundingClientRect();
+        const popup = document.createElement('div');
+        popup.className = 'floating-damage-text';
+        popup.innerText = `-${damageAmount.toLocaleString()}`;
+        
+        // Position damage text over target player's health bar
+        popup.style.left = `${rect.left + rect.width / 2}px`;
+        popup.style.top = `${rect.top + 10}px`;
+
+        overlayContainer.appendChild(popup);
+
+        setTimeout(() => {
+            if (popup && popup.parentNode) popup.parentNode.removeChild(popup);
+        }, 1000);
     }
 }
