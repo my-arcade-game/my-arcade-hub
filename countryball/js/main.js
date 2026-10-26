@@ -1,5 +1,5 @@
 // ==========================================
-// MAIN.JS - LIGHTWEIGHT SEED BROADCAST ROUTER
+// MAIN.JS - DUPLICATE AUDIO & SEED BROADCAST FIX
 // ==========================================
 import { Multiplayer } from '../../shared/multiplayer.js';
 
@@ -19,19 +19,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentScreenName = 'start';
   let isMultiplayerActive = false;
 
+  const myRole = () => (Multiplayer.isHost ? 'host' : 'guest');
+
   function sendBroadcastSafely(eventName, payload) {
     if (isMultiplayerActive && Multiplayer.channel && Multiplayer.channel.state === 'joined') {
       Multiplayer.channel.send({
         type: 'broadcast',
         event: eventName,
-        payload: payload
+        payload: { ...payload, senderRole: myRole() }
       });
     } else if (isMultiplayerActive && Multiplayer.channel) {
       setTimeout(() => {
         Multiplayer.channel.send({
           type: 'broadcast',
           event: eventName,
-          payload: payload
+          payload: { ...payload, senderRole: myRole() }
         });
       }, 350);
     }
@@ -55,22 +57,31 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (Multiplayer.channel) {
-        Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
+        Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, (payload) => {
+          if (payload.payload && payload.payload.senderRole === myRole()) return;
           openMenuScreen();
         });
 
+        // PREVENT DOUBLE SOUND: IGNORE SELF-BROADCAST & PASS REMOTE FLAG
         Multiplayer.channel.on('broadcast', { event: 'select_country' }, (payload) => {
-          const { slot, countryId } = payload.payload;
+          const { slot, countryId, senderRole } = payload.payload;
+          
+          // Ignore broadcast reflected back to sender
+          if (senderRole === myRole()) return;
+
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
           const country = countryId ? list.find(c => c.id === countryId) : null;
+          
           if (typeof MenuSystem !== 'undefined' && MenuSystem.setSelection) {
-            MenuSystem.setSelection(slot, country);
+            // Pass true for isRemote to prevent secondary sound playback
+            MenuSystem.setSelection(slot, country, true);
           }
         });
 
-        // GUEST RECEIVES TINY SEED PAYLOAD & GENERATES REPLAY LOCALLY IN 10ms
         Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
-          const { p1Id, p2Id, seed } = payload.payload;
+          const { p1Id, p2Id, seed, senderRole } = payload.payload;
+          if (senderRole === myRole()) return;
+
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
           const p1 = list.find(c => c.id === p1Id);
           const p2 = list.find(c => c.id === p2Id);
@@ -89,9 +100,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // REMATCH LISTENER (SEED ONLY)
         Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
-          const { seed } = payload.payload;
+          const { seed, senderRole } = payload.payload;
+          if (senderRole === myRole()) return;
+
           currentScreenName = 'battle';
           const selections = MenuSystem.getSelections();
           if (screenWinner) screenWinner.classList.add('hidden');
@@ -105,7 +117,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        Multiplayer.channel.on('broadcast', { event: 'select_again' }, () => {
+        Multiplayer.channel.on('broadcast', { event: 'select_again' }, (payload) => {
+          if (payload.payload && payload.payload.senderRole === myRole()) return;
+
           currentScreenName = 'menu';
           if (screenWinner) screenWinner.classList.add('hidden');
           if (screenMenu) screenMenu.classList.remove('hidden');
@@ -194,7 +208,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   window.addEventListener('keydown', handlePressStart);
 
-  // START FIGHT BUTTON
   if (btnFight) {
     btnFight.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
@@ -210,7 +223,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const matchSeed = Math.floor(Math.random() * 2147483647);
 
       if (isMultiplayerActive && Multiplayer.isHost) {
-        // BROADCAST TINY SEED ONLY (~100 BYTES) TO PREVENT WEBSOCKET DROPS
         sendBroadcastSafely('start_game_battle', {
           p1Id: selections.p1.id,
           p2Id: selections.p2.id,
@@ -232,7 +244,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // REMATCH BUTTON
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
