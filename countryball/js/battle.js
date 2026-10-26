@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - GPU-CACHED EMOJIS, STABLE ULT SYSTEM & FIXED HOST-AUTHORITATIVE MULTIPLAYER SYNC
+// BATTLE.JS - DETERMINISTIC SEEDED SIMULATION ENGINE
 // ==========================================
 
 var BattleSystem = (() => {
@@ -25,10 +25,17 @@ var BattleSystem = (() => {
   let suddenDeathTriggered = false;
   let rgbHue = 0;
 
-  // Real-time Host Synchronization Control State
-  let isMultiplayerActive = false;
-  let isHostPlayer = false;
-  let syncFrameCounter = 0;
+  // MULBERRY32 SEEDED PRNG ENGINE
+  let currentSeed = 123456789;
+  function setSeed(seed) {
+    currentSeed = seed || 123456789;
+  }
+  function seededRandom() {
+    let t = (currentSeed += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
 
   const GLOBAL_SPEED_MULT = 1.35;
 
@@ -38,9 +45,7 @@ var BattleSystem = (() => {
   let shakeTimer = 0;
   let shakeIntensity = 0;
 
-  // ==========================================
-  // HIGH-PERFORMANCE EMOJI CACHE
-  // ==========================================
+  // EMOJI CACHE
   const emojiCache = {};
   function drawCachedEmoji(targetCtx, emoji, size) {
     if (!emoji) return;
@@ -93,7 +98,7 @@ var BattleSystem = (() => {
       this.maxLives = 2; 
       this.immunityTimer = 0; 
 
-      const angle = Math.random() * Math.PI * 2; 
+      const angle = seededRandom() * Math.PI * 2; 
       const initialSpeed = config.speed * GLOBAL_SPEED_MULT;
       this.vx = Math.cos(angle) * initialSpeed; 
       this.vy = Math.sin(angle) * initialSpeed; 
@@ -277,10 +282,10 @@ var BattleSystem = (() => {
       const margin = this.radius + 12; 
       let bounced = false; 
 
-      if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += (Math.random() - 0.5) * 0.8; bounced = true; } 
-      if (this.x + margin > canvas.width) { this.x = canvas.width - margin; this.vx = -Math.abs(this.vx); this.vy += (Math.random() - 0.5) * 0.8; bounced = true; } 
-      if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += (Math.random() - 0.5) * 0.8; bounced = true; } 
-      if (this.y + margin > canvas.height - 20) { this.y = canvas.height - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += (Math.random() - 0.5) * 0.8; bounced = true; } 
+      if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += (seededRandom() - 0.5) * 0.8; bounced = true; } 
+      if (this.x + margin > canvas.width) { this.x = canvas.width - margin; this.vx = -Math.abs(this.vx); this.vy += (seededRandom() - 0.5) * 0.8; bounced = true; } 
+      if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
+      if (this.y + margin > canvas.height - 20) { this.y = canvas.height - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
 
       if (bounced && !isGameOver && window.AudioSystem) AudioSystem.play('bounce'); 
 
@@ -545,7 +550,7 @@ var BattleSystem = (() => {
         damage: damage,
         owner: ownerBall,
         radius: 14,
-        spinAngle: Math.random() * Math.PI,
+        spinAngle: seededRandom() * Math.PI,
         life: 180
       });
     }
@@ -608,8 +613,8 @@ var BattleSystem = (() => {
     const targetBall = balls.find(b => b !== ownerBall) || ownerBall;
 
     for (let i = 0; i < count; i++) {
-      const targetX = i === 0 ? targetBall.x + (Math.random() - 0.5) * 30 : 50 + Math.random() * (canvas.width - 100);
-      const targetY = i === 0 ? targetBall.y + (Math.random() - 0.5) * 30 : 100 + Math.random() * (canvas.height - 180);
+      const targetX = i === 0 ? targetBall.x + (seededRandom() - 0.5) * 30 : 50 + seededRandom() * (canvas.width - 100);
+      const targetY = i === 0 ? targetBall.y + (seededRandom() - 0.5) * 30 : 100 + seededRandom() * (canvas.height - 180);
 
       airstrikes.push({
         x: targetX,
@@ -854,8 +859,8 @@ var BattleSystem = (() => {
     for (let i = 0; i < 3; i++) {
       hazards.push({
         type: 'maple_syrup',
-        x: 60 + Math.random() * (canvas.width - 120),
-        y: 100 + Math.random() * (canvas.height - 200),
+        x: 60 + seededRandom() * (canvas.width - 120),
+        y: 100 + seededRandom() * (canvas.height - 200),
         radius: 55,
         life: duration,
         owner: ownerBall
@@ -919,8 +924,8 @@ var BattleSystem = (() => {
     for (let i = 0; i < count; i++) {
       hazards.push({
         type: 'bamboo_trap',
-        x: 60 + Math.random() * (canvas.width - 120),
-        y: 100 + Math.random() * (canvas.height - 200),
+        x: 60 + seededRandom() * (canvas.width - 120),
+        y: 100 + seededRandom() * (canvas.height - 200),
         radius: 25,
         life: 360,
         owner: ownerBall
@@ -1401,11 +1406,9 @@ var BattleSystem = (() => {
     });
   }
 
-  // UPDATED START SIGNATURE FOR MULTIPLAYER HOST/GUEST STATUS
-  function start(p1Data, p2Data, callback, isMP = false, host = false) {
-    isMultiplayerActive = isMP;
-    isHostPlayer = host;
-    syncFrameCounter = 0;
+  // START FUNCTION RECEIVES MATCH SEED
+  function start(p1Data, p2Data, callback, seed = 123456789) {
+    setSeed(seed);
 
     onBattleComplete = callback;
     isGameOver = false;
@@ -1438,70 +1441,6 @@ var BattleSystem = (() => {
     loop();
   }
 
-  // Safe packaging of physical state into compact payload
-  function getHostSyncSnapshot() {
-    return {
-      t: matchTimer,
-      b: balls.map(b => ({
-        x: Math.round(b.x * 10) / 10,
-        y: Math.round(b.y * 10) / 10,
-        vx: Math.round(b.vx * 10) / 10,
-        vy: Math.round(b.vy * 10) / 10,
-        hp: Math.round(b.hp * 10) / 10,
-        maxHp: b.maxHp,
-        lives: b.lives,
-        wa: Math.round(b.weaponAngle * 100) / 100,
-        rage: b.hasTriggeredRage ? 1 : 0,
-        sh: b.shieldTimer || 0,
-        imm: b.immunityTimer || 0,
-        st: b.stunTimer || 0,
-        inv: b.invisibleTimer || 0,
-        br: b.burnTimer || 0,
-        hyp: b.hypnosisTimer || 0
-      })),
-      it: items.map(i => ({ x: Math.round(i.x), y: Math.round(i.y), type: i.type, icon: i.icon, radius: i.radius })),
-      p: projectiles.map(p => ({ x: Math.round(p.x), y: Math.round(p.y), vx: Math.round((p.vx || 0) * 10) / 10, vy: Math.round((p.vy || 0) * 10) / 10, type: p.type, spinAngle: Math.round((p.spinAngle || 0) * 100) / 100, radius: p.radius || 15 })),
-      hz: hazards.map(h => ({ x: Math.round(h.x), y: Math.round(h.y), type: h.type, radius: h.radius })),
-      as: airstrikes.map(a => ({ x: Math.round(a.x), y: Math.round(a.y), radius: a.radius, warningTimer: a.warningTimer, exploded: a.exploded })),
-      gh: ghosts.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), attached: g.attached })),
-      ht: hitTexts.map(t => ({ text: t.text, x: Math.round(t.x), y: Math.round(t.y), life: t.life, color: t.color }))
-    };
-  }
-
-  // Applying snapshot safely on Guest device
-  function applyHostSync(snapshot) {
-    if (!snapshot) return;
-    if (snapshot.t !== undefined) matchTimer = snapshot.t;
-
-    if (snapshot.b && snapshot.b.length === balls.length) {
-      snapshot.b.forEach((data, idx) => {
-        const b = balls[idx];
-        b.x = data.x;
-        b.y = data.y;
-        b.vx = data.vx;
-        b.vy = data.vy;
-        b.hp = data.hp;
-        b.maxHp = data.maxHp;
-        b.lives = data.lives;
-        b.weaponAngle = data.wa;
-        b.hasTriggeredRage = data.rage === 1;
-        b.shieldTimer = data.sh;
-        b.immunityTimer = data.imm;
-        b.stunTimer = data.st;
-        b.invisibleTimer = data.inv;
-        b.burnTimer = data.br;
-        b.hypnosisTimer = data.hyp;
-      });
-    }
-
-    if (snapshot.it) items = snapshot.it;
-    if (snapshot.p) projectiles = snapshot.p;
-    if (snapshot.hz) hazards = snapshot.hz;
-    if (snapshot.as) airstrikes = snapshot.as;
-    if (snapshot.gh) ghosts = snapshot.gh;
-    if (snapshot.ht) hitTexts = snapshot.ht;
-  }
-
   function checkGameOver() {
     if (isGameOver || isIntroSequence || balls.length < 2) return;
 
@@ -1529,7 +1468,7 @@ var BattleSystem = (() => {
     const currentInterval = matchSec >= 60 ? 55 : (matchSec >= 30 ? 80 : 110);
 
     if (spawnTimer % currentInterval === 0) {
-      const rand = Math.random();
+      const rand = seededRandom();
       let itemType = 'ENERGY', icon = '⚡';
 
       if (matchSec < 30) {
@@ -1550,8 +1489,8 @@ var BattleSystem = (() => {
       let safeX = 0, safeY = 0, isValid = false, attempts = 0;
       while (!isValid && attempts < 25) {
         attempts++;
-        safeX = 40 + Math.random() * (canvas.width - 80);
-        safeY = 100 + Math.random() * (canvas.height - 180);
+        safeX = 40 + seededRandom() * (canvas.width - 80);
+        safeY = 100 + seededRandom() * (canvas.height - 180);
         isValid = balls.every(b => Math.hypot(b.x - safeX, b.y - safeY) > b.radius + 50);
       }
 
@@ -1697,11 +1636,9 @@ var BattleSystem = (() => {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.fillRect(0, 53, canvas.width, 1);
 
-    // Symmetric HUD bounds (P1: x=8..148, P2: x=212..352)
     drawBar(8, 26, 140, 18, b1.hp, b1.maxHp, b1.hasTriggeredRage ? '#ff0033' : '#00f0ff', b1.config.name, b1.config.flag, true, b1.lives);
     drawBar(212, 26, 140, 18, b2.hp, b2.maxHp, b2.hasTriggeredRage ? '#ff0033' : '#ff0055', b2.config.name, b2.config.flag, false, b2.lives);
 
-    // Center Timer Badge
     const matchSec = Math.floor(matchTimer / 60);
     ctx.fillStyle = '#121420';
     if (ctx.roundRect) {
@@ -1727,7 +1664,6 @@ var BattleSystem = (() => {
   function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.save();
 
-    // Header Text
     ctx.font = '900 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
@@ -1753,7 +1689,6 @@ var BattleSystem = (() => {
     ctx.fillText(displayName, 0, 0);
     ctx.restore();
 
-    // Health Bar fill & border
     ctx.fillStyle = '#111625';
     ctx.fillRect(x, y, w, h);
 
@@ -1774,7 +1709,6 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
-  // MAIN GAME RENDER & PHYSICS LOOP
   function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1782,47 +1716,32 @@ var BattleSystem = (() => {
 
     if (shakeTimer > 0) {
       shakeTimer--;
-      const dx = (Math.random() - 0.5) * shakeIntensity;
-      const dy = (Math.random() - 0.5) * shakeIntensity;
+      const dx = (seededRandom() - 0.5) * shakeIntensity;
+      const dy = (seededRandom() - 0.5) * shakeIntensity;
       ctx.translate(dx, dy);
     }
 
-    // Host calculates physics engine and timer
     if (!isGameOver && !isIntroSequence) {
-      if (!isMultiplayerActive || isHostPlayer) {
-        matchTimer++;
+      matchTimer++;
 
-        const matchSec = Math.floor(matchTimer / 60);
+      const matchSec = Math.floor(matchTimer / 60);
 
-        if (matchSec >= 60 && !suddenDeathTriggered) {
-          suddenDeathTriggered = true;
-          triggerCustomBanner('⚡ SUDDEN DEATH: FAST ULTS / EPIC OVERDRIVE! ⚡', 'rgba(180, 0, 0, 0.95)', '#ff0055');
-        }
-
-        spawnItems();
-        checkItemCollisions();
-        updateAirstrikes();
-        updateHazards();
-        updateObstacles();
-        updateGhosts();
-        updateKerisDaggers();
-        updateProjectiles();
-        updateSpecialEffects();
-        checkCollisions();
-        checkGameOver();
-
-        // Broadcast snapshot to Guest every 4 frames (15 FPS rate to avoid WebSocket congestion)
-        if (isMultiplayerActive && isHostPlayer && window.Multiplayer && window.Multiplayer.channel) {
-          syncFrameCounter++;
-          if (syncFrameCounter % 4 === 0) {
-            window.Multiplayer.channel.send({
-              type: 'broadcast',
-              event: 'battle_sync',
-              payload: getHostSyncSnapshot()
-            });
-          }
-        }
+      if (matchSec >= 60 && !suddenDeathTriggered) {
+        suddenDeathTriggered = true;
+        triggerCustomBanner('⚡ SUDDEN DEATH: FAST ULTS / EPIC OVERDRIVE! ⚡', 'rgba(180, 0, 0, 0.95)', '#ff0055');
       }
+
+      spawnItems();
+      checkItemCollisions();
+      updateAirstrikes();
+      updateHazards();
+      updateObstacles();
+      updateGhosts();
+      updateKerisDaggers();
+      updateProjectiles();
+      updateSpecialEffects();
+      checkCollisions();
+      checkGameOver();
     }
 
     drawHazards();
@@ -1834,9 +1753,7 @@ var BattleSystem = (() => {
     drawSpecialEffects();
 
     balls.forEach(b => {
-      if (!isMultiplayerActive || isHostPlayer) {
-        b.update();
-      }
+      b.update();
       b.draw();
     });
 
@@ -1873,7 +1790,6 @@ var BattleSystem = (() => {
 
   const apiExports = {
     start,
-    applyHostSync,
     spawnOrbitingKeris,
     spawnNapalmStrike,
     spawnTeapotSpill,

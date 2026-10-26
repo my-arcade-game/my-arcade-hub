@@ -1,3 +1,4 @@
+// /countryball/js/main.js
 import { Multiplayer } from '../../shared/multiplayer.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -30,19 +31,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         modeBadge.style.color = Multiplayer.isHost ? '#00f2fe' : '#ff0055';
       }
 
-      // Initialize MenuSystem with exact multiplayer state
       if (typeof MenuSystem !== 'undefined') {
         MenuSystem.init({ active: true, isHost: Multiplayer.isHost });
       }
 
       // Setup Broadcast Listeners
       if (Multiplayer.channel) {
-        // Broadcast: Start menu command received from connected player
         Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
           openMenuScreen();
         });
 
-        // Broadcast: Selection updated
         Multiplayer.channel.on('broadcast', { event: 'select_country' }, (payload) => {
           const { slot, countryId } = payload.payload;
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
@@ -52,9 +50,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // Broadcast: Start fight (Passed Host status into BattleSystem)
+        // START BATTLE WITH SYNCHRONIZED SEED
         Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
-          const { p1Id, p2Id } = payload.payload;
+          const { p1Id, p2Id, seed } = payload.payload;
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
           const p1 = list.find(c => c.id === p1Id);
           const p2 = list.find(c => c.id === p2Id);
@@ -62,79 +60,34 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (p1 && p2) {
             currentScreenName = 'battle';
             if (screenMenu) screenMenu.classList.add('hidden');
-            setRandomBackground();
+            setRandomBackground(seed);
             if (window.BattleSystem) {
               BattleSystem.start(p1, p2, (winner) => {
                 showWinner(winner);
-              }, true, Multiplayer.isHost);
+              }, seed);
             }
           }
         });
 
-        // Broadcast: Receive continuous Host physics snapshot (Guest synchronization)
-        Multiplayer.channel.on('broadcast', { event: 'battle_sync' }, (payload) => {
-          if (!Multiplayer.isHost && window.BattleSystem && window.BattleSystem.applyHostSync) {
-            window.BattleSystem.applyHostSync(payload.payload);
-          }
-        });
-
-        // Broadcast: Rematch
-        Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, () => {
+        // REMATCH WITH NEW SYNCHRONIZED SEED
+        Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
+          const { seed } = payload.payload;
           currentScreenName = 'battle';
           const selections = MenuSystem.getSelections();
           if (screenWinner) screenWinner.classList.add('hidden');
           if (window.BattleSystem) {
-            setRandomBackground();
+            setRandomBackground(seed);
             BattleSystem.start(selections.p1, selections.p2, (winner) => {
               showWinner(winner);
-            }, true, Multiplayer.isHost);
+            }, seed);
           }
         });
 
-        // Broadcast: Select again
         Multiplayer.channel.on('broadcast', { event: 'select_again' }, () => {
           currentScreenName = 'menu';
           if (screenWinner) screenWinner.classList.add('hidden');
           if (screenMenu) screenMenu.classList.remove('hidden');
           MenuSystem.init({ active: isMultiplayerActive, isHost: Multiplayer.isHost });
-        });
-
-        // Broadcast: State sync request
-        Multiplayer.channel.on('broadcast', { event: 'request_game_state' }, () => {
-          if (Multiplayer.isHost) {
-            if (currentScreenName === 'menu') {
-              Multiplayer.channel.send({
-                type: 'broadcast',
-                event: 'press_start_menu',
-                payload: {}
-              });
-            }
-            const selections = MenuSystem.getSelections();
-            Multiplayer.channel.send({
-              type: 'broadcast',
-              event: 'game_state_sync',
-              payload: {
-                screen: currentScreenName,
-                p1Id: selections.p1 ? selections.p1.id : null,
-                p2Id: selections.p2 ? selections.p2.id : null
-              }
-            });
-          }
-        });
-
-        // Broadcast: Game state sync response
-        Multiplayer.channel.on('broadcast', { event: 'game_state_sync' }, (payload) => {
-          const { screen, p1Id, p2Id } = payload.payload;
-          const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
-
-          if (screen === 'menu' && currentScreenName === 'start') {
-            openMenuScreen();
-          }
-
-          if (typeof MenuSystem !== 'undefined') {
-            if (p1Id) MenuSystem.setSelection('p1', list.find(c => c.id === p1Id));
-            if (p2Id) MenuSystem.setSelection('p2', list.find(c => c.id === p2Id));
-          }
         });
       }
     } catch (err) {
@@ -150,7 +103,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Local selection trigger
   window.onLocalSelectionChange = (slot, countryId) => {
     if (isMultiplayerActive && Multiplayer.channel) {
       Multiplayer.channel.send({
@@ -161,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   };
 
-  function setRandomBackground() {
+  function setRandomBackground(seed = Math.floor(Math.random() * 10000)) {
     const bgImages = [
       'america_leader_pixel_art.webp',
       'china_leader_pixel_art.webp',
@@ -170,8 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const bgElement = document.getElementById('ring-background');
     if (bgElement) {
-      const randomImg = bgImages[Math.floor(Math.random() * bgImages.length)];
-      bgElement.src = `assets/background/${randomImg}`;
+      const idx = Math.abs(seed) % bgImages.length;
+      bgElement.src = `assets/background/${bgImages[idx]}`;
     }
   }
 
@@ -209,20 +161,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.AudioSystem.play('click');
     }
 
-    if (isMultiplayerActive) {
-      if (Multiplayer.channel) {
-        Multiplayer.channel.send({
-          type: 'broadcast',
-          event: 'press_start_menu',
-          payload: {}
-        });
-      }
+    if (isMultiplayerActive && Multiplayer.channel) {
+      Multiplayer.channel.send({
+        type: 'broadcast',
+        event: 'press_start_menu',
+        payload: {}
+      });
     }
 
     openMenuScreen();
   }
 
-  // GLOBAL TAP & CLICK LISTENERS
   if (screenStart) {
     screenStart.addEventListener('click', handlePressStart);
     screenStart.addEventListener('pointerdown', handlePressStart);
@@ -240,19 +189,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!selections.p1 || !selections.p2) return;
 
       if (window.AudioSystem) {
-        if (typeof window.AudioSystem.stopCountrySound === 'function') {
-          window.AudioSystem.stopCountrySound();
-        }
-        if (typeof window.AudioSystem.play === 'function') {
-          window.AudioSystem.play('click');
-        }
+        if (typeof window.AudioSystem.stopCountrySound === 'function') window.AudioSystem.stopCountrySound();
+        if (typeof window.AudioSystem.play === 'function') window.AudioSystem.play('click');
       }
+
+      // GENERATE A SEED FOR DETERMINISTIC SIMULATION
+      const matchSeed = Math.floor(Math.random() * 2147483647);
 
       if (isMultiplayerActive && Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
           event: 'start_game_battle',
-          payload: { p1Id: selections.p1.id, p2Id: selections.p2.id }
+          payload: { p1Id: selections.p1.id, p2Id: selections.p2.id, seed: matchSeed }
         });
       }
 
@@ -260,21 +208,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (screenMenu) screenMenu.classList.add('hidden');
 
       if (window.BattleSystem) {
-        setRandomBackground();
+        setRandomBackground(matchSeed);
         BattleSystem.start(selections.p1, selections.p2, (winner) => {
           showWinner(winner);
-        }, isMultiplayerActive, Multiplayer.isHost);
+        }, matchSeed);
       }
     });
   }
 
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
+      const matchSeed = Math.floor(Math.random() * 2147483647);
+
       if (isMultiplayerActive && Multiplayer.channel) {
         Multiplayer.channel.send({
           type: 'broadcast',
           event: 'rematch_battle',
-          payload: {}
+          payload: { seed: matchSeed }
         });
       }
 
@@ -283,10 +233,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (screenWinner) screenWinner.classList.add('hidden');
 
       if (window.BattleSystem) {
-        setRandomBackground();
+        setRandomBackground(matchSeed);
         BattleSystem.start(selections.p1, selections.p2, (winner) => {
           showWinner(winner);
-        }, isMultiplayerActive, Multiplayer.isHost);
+        }, matchSeed);
       }
     });
   }
