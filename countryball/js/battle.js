@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - DETERMINISTIC SEEDED SIMULATION ENGINE & SAFE CANVAS RENDERER
+// BATTLE.JS - GPU-CACHED EMOJIS, STABLE ULT SYSTEM & DETERMINISTIC REPLAY ENGINE
 // ==========================================
 
 var BattleSystem = (() => {
@@ -25,11 +25,15 @@ var BattleSystem = (() => {
   let suddenDeathTriggered = false;
   let rgbHue = 0;
 
-  // MULBERRY32 DETERMINISTIC SEEDED PRNG ENGINE
+  // REPLAY & HEADLESS SIMULATION CONTROL
+  let isHeadless = false;
+  let currentFrameEvents = [];
+  let activeReplay = null;
+  let currentPlaybackFrame = 0;
+
+  // MULBERRY32 DETERMINISTIC PRNG ENGINE
   let currentSeed = 123456789;
-  function setSeed(seed) {
-    currentSeed = seed || 123456789;
-  }
+  function setSeed(seed) { currentSeed = seed || 123456789; }
   function seededRandom() {
     let t = (currentSeed += 0x6D2B79F5);
     t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -45,7 +49,24 @@ var BattleSystem = (() => {
   let shakeTimer = 0;
   let shakeIntensity = 0;
 
+  // SAFE AUDIO DISPATCHER (HEADLESS EVENT LOGGING vs LIVE SOUND)
+  function playSound(type, name, weapon) {
+    if (isHeadless) {
+      currentFrameEvents.push({ type: 'sound_' + type, name, weapon });
+    } else {
+      try {
+        if (type === 'fx' && window.AudioSystem) AudioSystem.play(name);
+        else if (type === 'file' && window.AudioSystem && window.AudioSystem.playFile) AudioSystem.playFile(name);
+        else if (type === 'weapon' && window.AudioSystem && window.AudioSystem.playWeaponSound) window.AudioSystem.playWeaponSound(weapon);
+        else if (type === 'voice' && window.AudioSystem && window.AudioSystem.playVoice) window.AudioSystem.playVoice(name);
+        else if (type === 'ult' && window.AudioSystem && window.AudioSystem.playUltiSound) window.AudioSystem.playUltiSound();
+      } catch (e) {}
+    }
+  }
+
+  // ==========================================
   // HIGH-PERFORMANCE EMOJI CACHE
+  // ==========================================
   const emojiCache = {};
   function drawCachedEmoji(targetCtx, emoji, size) {
     if (!emoji) return;
@@ -69,6 +90,9 @@ var BattleSystem = (() => {
   function triggerShake(duration = 18, intensity = 10) {
     shakeTimer = duration;
     shakeIntensity = intensity;
+    if (isHeadless) {
+      currentFrameEvents.push({ type: 'shake', duration, intensity });
+    }
   }
 
   function notifyUlt(caster) {
@@ -98,7 +122,7 @@ var BattleSystem = (() => {
       this.maxLives = 2; 
       this.immunityTimer = 0; 
 
-      const angle = seededRandom() * Math.PI * 2; 
+      const angle = Math.random() * Math.PI * 2; 
       const initialSpeed = config.speed * GLOBAL_SPEED_MULT;
       this.vx = Math.cos(angle) * initialSpeed; 
       this.vy = Math.sin(angle) * initialSpeed; 
@@ -196,11 +220,7 @@ var BattleSystem = (() => {
             color: '#05ffa1' 
           }); 
 
-          try {
-            if (window.AudioSystem && window.AudioSystem.playFile) { 
-              window.AudioSystem.playFile('healspawn.mp3'); 
-            }
-          } catch(e) {}
+          playSound('file', 'healspawn.mp3');
         } else {
           this.hp = 0; 
           this.lives = 0; 
@@ -284,14 +304,12 @@ var BattleSystem = (() => {
       const margin = this.radius + 12; 
       let bounced = false; 
 
-      if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += (seededRandom() - 0.5) * 0.8; bounced = true; } 
-      if (this.x + margin > canvas.width) { this.x = canvas.width - margin; this.vx = -Math.abs(this.vx); this.vy += (seededRandom() - 0.5) * 0.8; bounced = true; } 
-      if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
-      if (this.y + margin > canvas.height - 20) { this.y = canvas.height - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
+      if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += (Math.random() - 0.5) * 0.8; bounced = true; } 
+      if (this.x + margin > canvas.width) { this.x = canvas.width - margin; this.vx = -Math.abs(this.vx); this.vy += (Math.random() - 0.5) * 0.8; bounced = true; } 
+      if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += (Math.random() - 0.5) * 0.8; bounced = true; } 
+      if (this.y + margin > canvas.height - 20) { this.y = canvas.height - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += (Math.random() - 0.5) * 0.8; bounced = true; } 
 
-      try {
-        if (bounced && !isGameOver && window.AudioSystem) AudioSystem.play('bounce'); 
-      } catch(e) {}
+      if (bounced && !isGameOver) playSound('fx', 'bounce'); 
 
       const weaponSpeedBoost = matchSec >= 60 ? 1.2 : 1.0;
       this.weaponAngle += this.weaponSpeed * weaponSpeedBoost; 
@@ -462,7 +480,6 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
-  // SAFE INTRO BANNER GUARANTEES FIGHT UNLOCK EVEN IF AUDIO FAILS
   function triggerIntroBanner() {
     isIntroSequence = true; 
     const overlay = document.getElementById('banner-overlay');
@@ -481,13 +498,10 @@ var BattleSystem = (() => {
 
     text.innerHTML = 'READY...';
     text.className = 'banner-ready';
+    text.style.color = '';
     overlay.classList.add('show');
 
-    try {
-      if (window.AudioSystem && window.AudioSystem.playVoice) {
-        window.AudioSystem.playVoice('fight_start');
-      }
-    } catch (e) {}
+    playSound('voice', 'fight_start');
 
     setTimeout(() => {
       text.innerHTML = 'FIGHT!';
@@ -496,12 +510,17 @@ var BattleSystem = (() => {
 
       setTimeout(() => {
         overlay.classList.remove('show');
-        isIntroSequence = false; // Unlocks battle loop unconditionally
+        isIntroSequence = false; 
       }, 1600);
     }, 1400);
   }
 
   function triggerCustomBanner(textString, bgColor, textColor) {
+    if (isHeadless) {
+      currentFrameEvents.push({ type: 'banner', text: textString, bg: bgColor, color: textColor });
+      return;
+    }
+
     const overlay = document.getElementById('banner-overlay');
     const text = document.getElementById('banner-text');
     if (!overlay || !text) return;
@@ -521,11 +540,7 @@ var BattleSystem = (() => {
 
     triggerShake(24, 12);
 
-    try {
-      if (window.AudioSystem && window.AudioSystem.playUltiSound) {
-        window.AudioSystem.playUltiSound();
-      }
-    } catch (e) {}
+    playSound('ult');
 
     if (window.bannerTimeout) clearTimeout(window.bannerTimeout);
     window.bannerTimeout = setTimeout(() => {
@@ -558,12 +573,12 @@ var BattleSystem = (() => {
         damage: damage,
         owner: ownerBall,
         radius: 14,
-        spinAngle: seededRandom() * Math.PI,
+        spinAngle: Math.random() * Math.PI,
         life: 180
       });
     }
 
-    try { if (window.AudioSystem) AudioSystem.playFile('slice.mp3'); } catch(e) {}
+    playSound('file', 'slice.mp3');
   }
 
   function spawnBaguetteWalls(ownerBall) {
@@ -594,7 +609,7 @@ var BattleSystem = (() => {
       });
     }
 
-    try { if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('slice.mp3'); } catch(e) {}
+    playSound('file', 'slice.mp3');
   }
 
   function updateKerisDaggers() {}
@@ -619,8 +634,8 @@ var BattleSystem = (() => {
     const targetBall = balls.find(b => b !== ownerBall) || ownerBall;
 
     for (let i = 0; i < count; i++) {
-      const targetX = i === 0 ? targetBall.x + (seededRandom() - 0.5) * 30 : 50 + seededRandom() * (canvas.width - 100);
-      const targetY = i === 0 ? targetBall.y + (seededRandom() - 0.5) * 30 : 100 + seededRandom() * (canvas.height - 180);
+      const targetX = i === 0 ? targetBall.x + (Math.random() - 0.5) * 30 : 50 + Math.random() * (canvas.width - 100);
+      const targetY = i === 0 ? targetBall.y + (Math.random() - 0.5) * 30 : 100 + Math.random() * (canvas.height - 180);
 
       airstrikes.push({
         x: targetX,
@@ -653,7 +668,7 @@ var BattleSystem = (() => {
       owner: ownerBall
     });
     triggerShake(15, 8);
-    try { if (window.AudioSystem) window.AudioSystem.playFile('boom.mp3'); } catch(e) {}
+    playSound('file', 'boom.mp3');
   }
 
   function spawnSnowVortex(ownerBall, duration = 360) {
@@ -763,7 +778,7 @@ var BattleSystem = (() => {
   function drawGhosts() {
     ghosts.forEach(g => {
       ctx.save();
-      ctx.translate(g.x || 0, (g.y || 0) - 15);
+      ctx.translate(g.x, g.y - 15);
       drawCachedEmoji(ctx, '👻', 28);
       ctx.restore();
     });
@@ -865,8 +880,8 @@ var BattleSystem = (() => {
     for (let i = 0; i < 3; i++) {
       hazards.push({
         type: 'maple_syrup',
-        x: 60 + seededRandom() * (canvas.width - 120),
-        y: 100 + seededRandom() * (canvas.height - 200),
+        x: 60 + Math.random() * (canvas.width - 120),
+        y: 100 + Math.random() * (canvas.height - 200),
         radius: 55,
         life: duration,
         owner: ownerBall
@@ -930,8 +945,8 @@ var BattleSystem = (() => {
     for (let i = 0; i < count; i++) {
       hazards.push({
         type: 'bamboo_trap',
-        x: 60 + seededRandom() * (canvas.width - 120),
-        y: 100 + seededRandom() * (canvas.height - 200),
+        x: 60 + Math.random() * (canvas.width - 120),
+        y: 100 + Math.random() * (canvas.height - 200),
         radius: 25,
         life: 360,
         owner: ownerBall
@@ -1004,7 +1019,7 @@ var BattleSystem = (() => {
         strike.exploded = true;
 
         triggerShake(10, 5);
-        try { if (window.AudioSystem) window.AudioSystem.playFile('boom.mp3'); } catch(e) {}
+        playSound('file', 'boom.mp3');
 
         balls.forEach(ball => {
           if (ball !== strike.owner && !ball.isInvincible) {
@@ -1196,12 +1211,12 @@ var BattleSystem = (() => {
       const p = projectiles[i];
       
       if (p.type === 'football' && p.curve) {
-        p.vx += Math.cos(Date.now() * 0.01) * p.curve;
-        p.vy += Math.sin(Date.now() * 0.01) * p.curve;
+        p.vx += Math.cos(matchTimer * 0.1) * p.curve;
+        p.vy += Math.sin(matchTimer * 0.1) * p.curve;
       }
 
-      p.x += (p.vx || 0);
-      p.y += (p.vy || 0);
+      p.x += p.vx;
+      p.y += p.vy;
 
       if (p.type === 'baguette' || p.type === 'keris_dagger') {
         p.life--;
@@ -1229,12 +1244,12 @@ var BattleSystem = (() => {
         if (ball !== p.owner && !ball.isInvincible) {
           const dist = Math.hypot(ball.x - p.x, ball.y - p.y);
           if (dist < ball.radius + p.radius) {
-            const finalDmg = Math.round((p.damage || 5) * getDamageScale());
+            const finalDmg = Math.round(p.damage * getDamageScale());
 
             const tookDmg = ball.takeDamage(finalDmg);
             if (tookDmg) {
-              ball.vx += (p.vx || 0) * 0.8;
-              ball.vy += (p.vy || 0) * 0.8;
+              ball.vx += p.vx * 0.8;
+              ball.vy += p.vy * 0.8;
               hitTexts.push({ text: `-${finalDmg}`, x: ball.x, y: ball.y - 25, life: 25, color: '#ff0055' });
               hit = true;
             }
@@ -1249,14 +1264,12 @@ var BattleSystem = (() => {
   function drawProjectiles() {
     projectiles.forEach(p => {
       ctx.save();
-      ctx.translate(p.x || 0, p.y || 0);
+      ctx.translate(p.x, p.y);
       if (p.type === 'baguette') {
         ctx.rotate(p.spinAngle || 0);
         drawCachedEmoji(ctx, '🥖', 32);
       } else if (p.type === 'keris_dagger') {
-        const vx = p.vx || 0.001;
-        const vy = p.vy || 0.001;
-        ctx.rotate(Math.atan2(vy, vx) + Math.PI / 2);
+        ctx.rotate(Math.atan2(p.vy, p.vx) + Math.PI / 2);
         drawCachedEmoji(ctx, '🗡️', 34);
       } else if (p.type === 'pizza_cutter') {
         ctx.rotate(p.spinAngle || 0);
@@ -1357,7 +1370,7 @@ var BattleSystem = (() => {
         ctx.stroke();
       } else if (eff.type === 'cherry_blossom_flash') {
         const elapsed = eff.maxLife - eff.life;
-        const target = eff.target || { x: 0, y: 0 };
+        const target = eff.target;
 
         for (let p = 0; p < 8; p++) {
           const px = (target.x + Math.sin(elapsed * 0.1 + p) * 100) % canvas.width;
@@ -1374,8 +1387,8 @@ var BattleSystem = (() => {
         ctx.fillStyle = `rgba(255, 30, 0, ${Math.sin(progress * Math.PI) * 0.35})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const target = eff.target || { x: 0, y: 0 };
-        const owner = eff.owner || { x: 0, y: 0 };
+        const target = eff.target;
+        const owner = eff.owner;
         const startX = owner.x;
         const startY = owner.y;
 
@@ -1412,41 +1425,6 @@ var BattleSystem = (() => {
     });
   }
 
-  // START METHOD INITIALIZES SEED ENGINE AND STARTS BATTLE
-  function start(p1Data, p2Data, callback, seed = 123456789) {
-    setSeed(seed);
-
-    onBattleComplete = callback;
-    isGameOver = false;
-    spawnTimer = 0;
-    matchTimer = 0;
-    suddenDeathTriggered = false;
-    shakeTimer = 0;
-    shakeIntensity = 0;
-    projectiles = [];
-    specialEffects = [];
-    hazards = [];
-    obstacles = [];
-    ghosts = [];
-    spiritDaggers = [];
-
-    balls = [
-      new Ball(p1Data, canvas.width * 0.28, canvas.height * 0.53, true),
-      new Ball(p2Data, canvas.width * 0.72, canvas.height * 0.53, false)
-    ];
-    items = [];
-    airstrikes = [];
-    hitTexts = [];
-
-    window.balls = balls;
-    window.hitTexts = hitTexts;
-
-    if (animationId) cancelAnimationFrame(animationId);
-
-    triggerIntroBanner();
-    loop();
-  }
-
   function checkGameOver() {
     if (isGameOver || isIntroSequence || balls.length < 2) return;
 
@@ -1456,13 +1434,13 @@ var BattleSystem = (() => {
       const winner = balls.find(b => b !== loser) || loser;
 
       triggerShake(20, 10);
-      try {
-        if (window.AudioSystem) AudioSystem.play('ko');
-      } catch(e) {}
+      playSound('fx', 'ko');
 
-      setTimeout(() => {
-        if (onBattleComplete) onBattleComplete(winner);
-      }, 700);
+      if (!isHeadless) {
+        setTimeout(() => {
+          if (onBattleComplete) onBattleComplete(winner);
+        }, 700);
+      }
     }
   }
 
@@ -1474,7 +1452,7 @@ var BattleSystem = (() => {
     const currentInterval = matchSec >= 60 ? 55 : (matchSec >= 30 ? 80 : 110);
 
     if (spawnTimer % currentInterval === 0) {
-      const rand = seededRandom();
+      const rand = Math.random();
       let itemType = 'ENERGY', icon = '⚡';
 
       if (matchSec < 30) {
@@ -1495,8 +1473,8 @@ var BattleSystem = (() => {
       let safeX = 0, safeY = 0, isValid = false, attempts = 0;
       while (!isValid && attempts < 25) {
         attempts++;
-        safeX = 40 + seededRandom() * (canvas.width - 80);
-        safeY = 100 + seededRandom() * (canvas.height - 180);
+        safeX = 40 + Math.random() * (canvas.width - 80);
+        safeY = 100 + Math.random() * (canvas.height - 180);
         isValid = balls.every(b => Math.hypot(b.x - safeX, b.y - safeY) > b.radius + 50);
       }
 
@@ -1516,9 +1494,7 @@ var BattleSystem = (() => {
           if (item.type === 'HP') {
             ball.hp = Math.min(ball.maxHp, ball.hp + 20);
             hitTexts.push({ text: '+20 HP', x: ball.x, y: ball.y - 30, life: 30, color: '#05ffa1' });
-            try {
-              if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('healspawn.mp3');
-            } catch(e) {}
+            playSound('file', 'healspawn.mp3');
           } else if (item.type === 'ENERGY') {
             if (ball.silenceTimer > 0) {
               hitTexts.push({ text: '🔇 SILENCED!', x: ball.x, y: ball.y - 30, life: 30, color: '#ff0000' });
@@ -1529,15 +1505,11 @@ var BattleSystem = (() => {
           } else if (item.type === 'SHIELD') {
             ball.shieldTimer = 180;
             hitTexts.push({ text: '🛡️ SHIELD!', x: ball.x, y: ball.y - 30, life: 30, color: '#00ffff' });
-            try {
-              if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('shieldspawn.mp3');
-            } catch(e) {}
+            playSound('file', 'shieldspawn.mp3');
           } else if (item.type === 'DASH') {
             ball.dashTimer = 180;
             hitTexts.push({ text: '💨 DASH!', x: ball.x, y: ball.y - 30, life: 30, color: '#ffaa00' });
-            try {
-              if (window.AudioSystem && window.AudioSystem.playFile) window.AudioSystem.playFile('dashspawn.mp3');
-            } catch(e) {}
+            playSound('file', 'dashspawn.mp3');
           }
           items.splice(i, 1);
         }
@@ -1565,9 +1537,7 @@ var BattleSystem = (() => {
       [b1.vx, b2.vx] = [b2.vx, b1.vx];
       [b1.vy, b2.vy] = [b2.vy, b1.vy];
 
-      try {
-        if (window.AudioSystem) AudioSystem.play('collide');
-      } catch(e) {}
+      playSound('fx', 'collide');
     }
 
     checkWeaponHit(b1, b2);
@@ -1609,11 +1579,7 @@ var BattleSystem = (() => {
 
         if (isCrit) triggerShake(10, 6);
 
-        try {
-          if (window.AudioSystem && window.AudioSystem.playWeaponSound) {
-            window.AudioSystem.playWeaponSound(attacker.config.weapon);
-          }
-        } catch(e) {}
+        playSound('weapon', null, attacker.config.weapon);
 
         hitTexts.push({
           text: isCrit ? `CRIT -${dmg}` : `-${dmg}`,
@@ -1719,21 +1685,258 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
-  function loop() {
+  // ==========================================
+  // HEADLESS MATCH GENERATOR & REPLAY RECORDING
+  // ==========================================
+  function generateReplay(p1Data, p2Data, seed = 123456789) {
+    setSeed(seed);
+    const originalMathRandom = Math.random;
+    Math.random = seededRandom;
+    isHeadless = true;
+
+    spawnTimer = 0;
+    matchTimer = 0;
+    suddenDeathTriggered = false;
+    isGameOver = false;
+    isIntroSequence = false;
+
+    balls = [
+      new Ball(p1Data, canvas.width * 0.28, canvas.height * 0.53, true),
+      new Ball(p2Data, canvas.width * 0.72, canvas.height * 0.53, false)
+    ];
+    items = [];
+    airstrikes = [];
+    projectiles = [];
+    specialEffects = [];
+    hazards = [];
+    obstacles = [];
+    ghosts = [];
+    spiritDaggers = [];
+    hitTexts = [];
+
+    window.balls = balls;
+    window.hitTexts = hitTexts;
+
+    let frames = [];
+    let winnerSlot = 'p1';
+
+    while (!isGameOver && matchTimer < 5400) {
+      matchTimer++;
+      currentFrameEvents = [];
+
+      const matchSec = Math.floor(matchTimer / 60);
+      if (matchSec >= 60 && !suddenDeathTriggered) {
+        suddenDeathTriggered = true;
+        triggerCustomBanner('⚡ SUDDEN DEATH: FAST ULTS / EPIC OVERDRIVE! ⚡', 'rgba(180, 0, 0, 0.95)', '#ff0055');
+      }
+
+      spawnItems();
+      checkItemCollisions();
+      updateAirstrikes();
+      updateHazards();
+      updateObstacles();
+      updateGhosts();
+      updateKerisDaggers();
+      updateProjectiles();
+      updateSpecialEffects();
+      checkCollisions();
+
+      balls.forEach(b => b.update());
+      checkGameOver();
+
+      if (isGameOver) {
+        const loser = balls.find(b => b.hp <= 0 && b.lives <= 0);
+        winnerSlot = loser ? (loser.isP1 ? 'p2' : 'p1') : 'p1';
+      }
+
+      // Record compact frame log
+      frames.push({
+        p1: { x: Math.round(balls[0].x * 10) / 10, y: Math.round(balls[0].y * 10) / 10, hp: Math.ceil(balls[0].hp), lives: balls[0].lives, wAngle: Math.round(balls[0].weaponAngle * 100) / 100, rage: balls[0].hasTriggeredRage },
+        p2: { x: Math.round(balls[1].x * 10) / 10, y: Math.round(balls[1].y * 10) / 10, hp: Math.ceil(balls[1].hp), lives: balls[1].lives, wAngle: Math.round(balls[1].weaponAngle * 100) / 100, rage: balls[1].hasTriggeredRage },
+        items: items.map(it => ({ x: Math.round(it.x), y: Math.round(it.y), icon: it.icon })),
+        projectiles: projectiles.map(pr => ({ x: Math.round(pr.x), y: Math.round(pr.y), type: pr.type, spinAngle: Math.round(pr.spinAngle * 10) / 10, vx: Math.round(pr.vx * 10) / 10, vy: Math.round(pr.vy * 10) / 10 })),
+        hazards: hazards.map(h => ({ x: Math.round(h.x), y: Math.round(h.y), radius: h.radius, type: h.type })),
+        obstacles: obstacles.map(o => ({ x: Math.round(o.x), y: Math.round(o.y), type: o.type })),
+        ghosts: ghosts.map(g => ({ x: Math.round(g.x), y: Math.round(g.y) })),
+        airstrikes: airstrikes.map(a => ({ x: Math.round(a.x), y: Math.round(a.y), radius: a.radius, exploded: a.exploded })),
+        events: currentFrameEvents
+      });
+    }
+
+    Math.random = originalMathRandom;
+    isHeadless = false;
+
+    return { frames, winnerSlot, seed };
+  }
+
+  // ==========================================
+  // PLAYBACK RENDERER (LOCKSTEP REPLAY RENDERING)
+  // ==========================================
+  function startPlayback(replayData, p1Data, p2Data, callback) {
+    activeReplay = replayData;
+    onBattleComplete = callback;
+    currentPlaybackFrame = 0;
+    isGameOver = false;
+    hitTexts = [];
+    shakeTimer = 0;
+    shakeIntensity = 0;
+
+    balls = [
+      new Ball(p1Data, canvas.width * 0.28, canvas.height * 0.53, true),
+      new Ball(p2Data, canvas.width * 0.72, canvas.height * 0.53, false)
+    ];
+
+    if (animationId) cancelAnimationFrame(animationId);
+
+    triggerIntroBanner();
+    playbackLoop(p1Data, p2Data);
+  }
+
+  function playbackLoop(p1Data, p2Data) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
 
     if (shakeTimer > 0) {
       shakeTimer--;
-      const dx = (seededRandom() - 0.5) * shakeIntensity;
-      const dy = (seededRandom() - 0.5) * shakeIntensity;
-      ctx.translate(dx, dy);
+      ctx.translate((Math.random() - 0.5) * shakeIntensity, (Math.random() - 0.5) * shakeIntensity);
+    }
+
+    if (!isIntroSequence && activeReplay && activeReplay.frames) {
+      if (currentPlaybackFrame < activeReplay.frames.length) {
+        const frameData = activeReplay.frames[currentPlaybackFrame];
+        matchTimer = currentPlaybackFrame;
+
+        // Execute frame sound & banner events
+        if (frameData.events) {
+          frameData.events.forEach(ev => {
+            if (ev.type === 'sound_fx') {
+              try { if (window.AudioSystem) AudioSystem.play(ev.name); } catch(e) {}
+            } else if (ev.type === 'sound_file') {
+              try { if (window.AudioSystem && window.AudioSystem.playFile) AudioSystem.playFile(ev.name); } catch(e) {}
+            } else if (ev.type === 'sound_weapon') {
+              try { if (window.AudioSystem && window.AudioSystem.playWeaponSound) window.AudioSystem.playWeaponSound(ev.weapon); } catch(e) {}
+            } else if (ev.type === 'sound_voice') {
+              try { if (window.AudioSystem && window.AudioSystem.playVoice) window.AudioSystem.playVoice(ev.name); } catch(e) {}
+            } else if (ev.type === 'sound_ult') {
+              try { if (window.AudioSystem && window.AudioSystem.playUltiSound) window.AudioSystem.playUltiSound(); } catch(e) {}
+            } else if (ev.type === 'banner') {
+              triggerCustomBanner(ev.text, ev.bg, ev.color);
+            } else if (ev.type === 'shake') {
+              triggerShake(ev.duration, ev.intensity);
+            }
+          });
+        }
+
+        // Render Hazards
+        hazards = frameData.hazards || [];
+        drawHazards();
+
+        // Render Airstrikes
+        airstrikes = frameData.airstrikes || [];
+        drawAirstrikes();
+
+        // Render Obstacles
+        obstacles = frameData.obstacles || [];
+        drawObstacles();
+
+        // Render Projectiles
+        projectiles = frameData.projectiles || [];
+        drawProjectiles();
+
+        // Render Ghosts
+        ghosts = frameData.ghosts || [];
+        drawGhosts();
+
+        // Sync and render P1 & P2 Balls
+        balls[0].x = frameData.p1.x;
+        balls[0].y = frameData.p1.y;
+        balls[0].hp = frameData.p1.hp;
+        balls[0].lives = frameData.p1.lives;
+        balls[0].weaponAngle = frameData.p1.wAngle;
+        balls[0].hasTriggeredRage = frameData.p1.rage;
+
+        balls[1].x = frameData.p2.x;
+        balls[1].y = frameData.p2.y;
+        balls[1].hp = frameData.p2.hp;
+        balls[1].lives = frameData.p2.lives;
+        balls[1].weaponAngle = frameData.p2.wAngle;
+        balls[1].hasTriggeredRage = frameData.p2.rage;
+
+        balls[0].draw();
+        balls[1].draw();
+
+        // Render Items
+        items = frameData.items || [];
+        drawItems();
+
+        // Render HUD
+        drawHUD();
+
+        currentPlaybackFrame++;
+      } else if (!isGameOver) {
+        isGameOver = true;
+        const winner = activeReplay.winnerSlot === 'p1' ? balls[0] : balls[1];
+        playSound('fx', 'ko');
+        setTimeout(() => {
+          if (onBattleComplete) onBattleComplete(winner);
+        }, 600);
+      }
+    } else {
+      drawReplayInitialState(p1Data, p2Data);
+    }
+
+    // Render Damage Hit Texts
+    for (let i = hitTexts.length - 1; i >= 0; i--) {
+      const t = hitTexts[i];
+      t.y -= 1.2; t.life--;
+      ctx.save();
+      ctx.font = '900 20px "Impact", "Arial Black", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#000000';
+      ctx.strokeText(t.text, t.x, t.y);
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.text, t.x, t.y);
+      ctx.restore();
+      if (t.life <= 0) hitTexts.splice(i, 1);
+    }
+
+    ctx.restore();
+    drawCanvasFrame();
+
+    animationId = requestAnimationFrame(() => playbackLoop(p1Data, p2Data));
+  }
+
+  function drawReplayInitialState(p1Data, p2Data) {
+    if (balls.length >= 2) {
+      balls[0].draw();
+      balls[1].draw();
+      drawHUD();
+    }
+  }
+
+  // STANDARD / SOLO START FUNCTION
+  function start(p1Data, p2Data, callback) {
+    const seed = Math.floor(Math.random() * 2147483647);
+    const replay = generateReplay(p1Data, p2Data, seed);
+    startPlayback(replay, p1Data, p2Data, callback);
+  }
+
+  function loop() {
+    // Legacy fallback loop maintained for API compatibility
+    if (activeReplay) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    if (shakeTimer > 0) {
+      shakeTimer--;
+      ctx.translate((Math.random() - 0.5) * shakeIntensity, (Math.random() - 0.5) * shakeIntensity);
     }
 
     if (!isGameOver && !isIntroSequence) {
       matchTimer++;
-
       const matchSec = Math.floor(matchTimer / 60);
 
       if (matchSec >= 60 && !suddenDeathTriggered) {
@@ -1762,36 +1965,23 @@ var BattleSystem = (() => {
     drawKerisDaggers();
     drawSpecialEffects();
 
-    balls.forEach(b => {
-      b.update();
-      b.draw();
-    });
-
+    balls.forEach(b => { b.update(); b.draw(); });
     drawItems();
 
     for (let i = hitTexts.length - 1; i >= 0; i--) {
       const t = hitTexts[i];
-      t.y -= 1.2;
-      t.life--;
-
+      t.y -= 1.2; t.life--;
       ctx.save();
       ctx.font = '900 20px "Impact", "Arial Black", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#000000';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4; ctx.strokeStyle = '#000000';
       ctx.strokeText(t.text, t.x, t.y);
-
-      ctx.fillStyle = t.color;
-      ctx.fillText(t.text, t.x, t.y);
+      ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
       ctx.restore();
-
       if (t.life <= 0) hitTexts.splice(i, 1);
     }
 
     ctx.restore();
-
     drawHUD();
     drawCanvasFrame();
 
@@ -1800,6 +1990,8 @@ var BattleSystem = (() => {
 
   const apiExports = {
     start,
+    generateReplay,
+    startPlayback,
     spawnOrbitingKeris,
     spawnNapalmStrike,
     spawnTeapotSpill,
@@ -1821,6 +2013,7 @@ var BattleSystem = (() => {
     spawnRicochetCricketBall,
     spawnCurvingFootball,
     spawnMortarSmoke,
+    spawnAirstrikes: spawnAirstrike,
     spawnAirstrike,
     triggerCustomBanner,
     triggerShake
