@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - DETERMINISTIC SIMULATION ENGINE (FIXED VIRTUAL GRID)
+// BATTLE.JS - STRICT DETERMINISTIC SIMULATION ENGINE
 // ==========================================
 
 var BattleSystem = (() => {
@@ -18,7 +18,6 @@ var BattleSystem = (() => {
   let hazards = [];
   let obstacles = [];
   let ghosts = [];
-  let spiritDaggers = [];
   let hitTexts = [];
   let animationId = null;
   let onBattleComplete = null;
@@ -35,7 +34,7 @@ var BattleSystem = (() => {
   let activeReplay = null;
   let currentPlaybackFrame = 0;
 
-  // MULBERRY32 DETERMINISTIC PRNG ENGINE
+  // MULBERRY32 PRNG ENGINE
   let currentSeed = 123456789;
   function setSeed(seed) { currentSeed = seed || 123456789; }
   function seededRandom() {
@@ -53,7 +52,6 @@ var BattleSystem = (() => {
   let shakeTimer = 0;
   let shakeIntensity = 0;
 
-  // SAFE AUDIO DISPATCHER
   function playSound(type, name, weapon) {
     if (isHeadless) {
       currentFrameEvents.push({ type: 'sound_' + type, name, weapon });
@@ -68,7 +66,6 @@ var BattleSystem = (() => {
     }
   }
 
-  // GPU EMOJI CACHE ENGINE
   const emojiCache = {};
   function drawCachedEmoji(targetCtx, emoji, size) {
     if (!emoji) return;
@@ -305,10 +302,13 @@ var BattleSystem = (() => {
       const margin = this.radius + 12; 
       let bounced = false; 
 
-      if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += (seededRandom() - 0.5) * 0.8; bounced = true; } 
-      if (this.x + margin > SIM_WIDTH) { this.x = SIM_WIDTH - margin; this.vx = -Math.abs(this.vx); this.vy += (seededRandom() - 0.5) * 0.8; bounced = true; } 
-      if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
-      if (this.y + margin > SIM_HEIGHT - 20) { this.y = SIM_HEIGHT - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += (seededRandom() - 0.5) * 0.8; bounced = true; } 
+      // DETERMINISTIC WALL BOUNCE (NO SEEDED RANDOM CORRUPTION)
+      const bounceAngleNoise = ((matchTimer % 7) - 3) * 0.08;
+
+      if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += bounceAngleNoise; bounced = true; } 
+      if (this.x + margin > SIM_WIDTH) { this.x = SIM_WIDTH - margin; this.vx = -Math.abs(this.vx); this.vy += bounceAngleNoise; bounced = true; } 
+      if (this.y - margin < 60) { this.y = margin + 60; this.vy = Math.abs(this.vy); this.vx += bounceAngleNoise; bounced = true; } 
+      if (this.y + margin > SIM_HEIGHT - 20) { this.y = SIM_HEIGHT - 20 - margin; this.vy = -Math.abs(this.vy); this.vx += bounceAngleNoise; bounced = true; } 
 
       if (bounced && !isGameOver) playSound('fx', 'bounce'); 
 
@@ -332,6 +332,12 @@ var BattleSystem = (() => {
           this.afterimages.splice(i, 1);
         }
       }
+
+      // FLOAT PRECISION CLAMPING (Prevents JS Engine V8 vs WebKit Desync)
+      this.x = Math.round(this.x * 100) / 100;
+      this.y = Math.round(this.y * 100) / 100;
+      this.vx = Math.round(this.vx * 100) / 100;
+      this.vy = Math.round(this.vy * 100) / 100;
     }
 
     draw() {
@@ -535,7 +541,164 @@ var BattleSystem = (() => {
     }, 1800);
   }
 
-  // ULTIMATE HELPERS
+  // ITEM SPAWNER WITH STRICT PRNG CONSUMPTION (EXACTLY 3 PRNG CALLS PER SPAWN)
+  function spawnItems() {
+    if (isIntroSequence) return;
+    spawnTimer++;
+
+    const matchSec = Math.floor(matchTimer / 60);
+    const currentInterval = matchSec >= 60 ? 55 : (matchSec >= 30 ? 80 : 110);
+
+    if (spawnTimer % currentInterval === 0) {
+      const randType = seededRandom();
+      const randX = seededRandom();
+      const randY = seededRandom();
+
+      let itemType = 'ENERGY', icon = '⚡';
+
+      if (matchSec < 30) {
+        if (randType < 0.50) { itemType = 'ENERGY'; icon = '⚡'; }
+        else if (randType < 0.70) { itemType = 'HP'; icon = '💚'; }
+        else if (randType < 0.85) { itemType = 'SHIELD'; icon = '🛡️'; }
+        else { itemType = 'DASH'; icon = '💨'; }
+      } else if (matchSec < 60) {
+        if (randType < 0.65) { itemType = 'ENERGY'; icon = '⚡'; }
+        else if (randType < 0.80) { itemType = 'HP'; icon = '💚'; }
+        else if (randType < 0.88) { itemType = 'SHIELD'; icon = '🛡️'; }
+        else { itemType = 'DASH'; icon = '💨'; }
+      } else {
+        if (randType < 0.80) { itemType = 'ENERGY'; icon = '⚡'; }
+        else { itemType = 'DASH'; icon = '💨'; }
+      }
+
+      const safeX = 40 + randX * (SIM_WIDTH - 80);
+      const safeY = 100 + randY * (SIM_HEIGHT - 180);
+
+      items.push({ x: safeX, y: safeY, type: itemType, icon: icon, radius: 18 });
+    }
+  }
+
+  function checkItemCollisions() {
+    if (isIntroSequence) return;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      balls.forEach(ball => {
+        const dist = Math.hypot(ball.x - item.x, ball.y - item.y);
+        if (dist < ball.radius + item.radius) {
+          if (item.type === 'HP') {
+            ball.hp = Math.min(ball.maxHp, ball.hp + 20);
+            hitTexts.push({ text: '+20 HP', x: ball.x, y: ball.y - 30, life: 30, color: '#05ffa1' });
+            playSound('file', 'healspawn.mp3');
+          } else if (item.type === 'ENERGY') {
+            if (ball.silenceTimer > 0) {
+              hitTexts.push({ text: '🔇 SILENCED!', x: ball.x, y: ball.y - 30, life: 30, color: '#ff0000' });
+            } else if (window.AbilitySystem) {
+              window.AbilitySystem.trigger(ball, 'ENERGY');
+              hitTexts.push({ text: ball.currentAbilityName || '⚡ ULTIMATE!', x: ball.x, y: ball.y - 30, life: 35, color: '#ffe600' });
+            }
+          } else if (item.type === 'SHIELD') {
+            ball.shieldTimer = 180;
+            hitTexts.push({ text: '🛡️ SHIELD!', x: ball.x, y: ball.y - 30, life: 30, color: '#00ffff' });
+            playSound('file', 'shieldspawn.mp3');
+          } else if (item.type === 'DASH') {
+            ball.dashTimer = 180;
+            hitTexts.push({ text: '💨 DASH!', x: ball.x, y: ball.y - 30, life: 30, color: '#ffaa00' });
+            playSound('file', 'dashspawn.mp3');
+          }
+          items.splice(i, 1);
+        }
+      });
+    }
+  }
+
+  function checkCollisions() {
+    if (balls.length < 2 || isGameOver || isIntroSequence) return;
+    const [b1, b2] = balls;
+
+    const dx = b2.x - b1.x;
+    const dy = b2.y - b1.y;
+    const dist = Math.hypot(dx, dy);
+    const minDist = b1.radius + b2.radius;
+
+    if (dist < minDist) {
+      const angle = Math.atan2(dy, dx);
+      const overlap = minDist - dist;
+      b1.x -= Math.cos(angle) * overlap * 0.5;
+      b1.y -= Math.sin(angle) * overlap * 0.5;
+      b2.x += Math.cos(angle) * overlap * 0.5;
+      b2.y += Math.sin(angle) * overlap * 0.5;
+
+      [b1.vx, b2.vx] = [b2.vx, b1.vx];
+      [b1.vy, b2.vy] = [b2.vy, b1.vy];
+
+      playSound('fx', 'collide');
+    }
+
+    checkWeaponHit(b1, b2);
+    checkWeaponHit(b2, b1);
+  }
+
+  function checkWeaponHit(attacker, defender) {
+    if (defender.cooldown > 0 || defender.isInvincible) return;
+
+    for (let i = 0; i < attacker.weaponCount; i++) {
+      const curAngle = attacker.weaponAngle + (i * (Math.PI * 2) / attacker.weaponCount);
+      const wPos = {
+        x: attacker.x + Math.cos(curAngle) * (attacker.weaponOrbitRadius + 20),
+        y: attacker.y + Math.sin(curAngle) * (attacker.weaponOrbitRadius + 20)
+      };
+
+      const dist = Math.hypot(defender.x - wPos.x, defender.y - wPos.y);
+
+      if (dist < defender.radius + 20) {
+        const baseDmg = (attacker.config.dmg || 8) * (attacker.damageMultiplier || 1.0);
+        const isCrit = attacker.hasTriggeredRage;
+        let dmg = Math.round((isCrit ? baseDmg * 1.5 : baseDmg) * getDamageScale());
+
+        const tookDmg = defender.takeDamage(dmg);
+        if (!tookDmg) return;
+
+        if (attacker.lifesteal && attacker.lifesteal > 0) {
+          attacker.hp = Math.min(attacker.maxHp, attacker.hp + (dmg * attacker.lifesteal));
+        }
+
+        defender.cooldown = 18;
+
+        if (!defender.zeroKnockbackFlag) {
+          const kAngle = Math.atan2(defender.y - wPos.y, defender.x - wPos.x);
+          const knockbackForce = isCrit ? 13 : 10;
+          defender.vx += Math.cos(kAngle) * knockbackForce;
+          defender.vy += Math.sin(kAngle) * knockbackForce;
+        }
+
+        if (isCrit) triggerShake(10, 6);
+        playSound('weapon', null, attacker.config.weapon);
+
+        hitTexts.push({
+          text: isCrit ? `CRIT -${dmg}` : `-${dmg}`,
+          x: defender.x,
+          y: defender.y - 30,
+          life: 28,
+          color: isCrit ? '#ff0033' : (attacker.isP1 ? '#00f0ff' : '#ff0055')
+        });
+        break;
+      }
+    }
+  }
+
+  function checkGameOver() {
+    if (isGameOver || isIntroSequence || balls.length < 2) return;
+
+    const loser = balls.find(b => b.hp <= 0 && b.lives <= 0);
+    if (loser) {
+      isGameOver = true;
+      const winner = balls.find(b => b !== loser) || loser;
+      triggerShake(20, 10);
+      playSound('fx', 'ko');
+    }
+  }
+
+  // ULTIMATES
   function spawnBaguetteStorm(ownerBall, count = 10, damage = 8) {
     notifyUlt(ownerBall);
     projectiles = projectiles.filter(p => !(p.type === 'baguette' && p.owner === ownerBall));
@@ -568,9 +731,7 @@ var BattleSystem = (() => {
     playSound('file', 'slice.mp3');
   }
 
-  function spawnBaguetteWalls(ownerBall) {
-    spawnBaguetteStorm(ownerBall, 10, 8);
-  }
+  function spawnBaguetteWalls(ownerBall) { spawnBaguetteStorm(ownerBall, 10, 8); }
 
   function spawnOrbitingKeris(ownerBall, count = 3) {
     notifyUlt(ownerBall);
@@ -925,14 +1086,12 @@ var BattleSystem = (() => {
   // UPDATE & DRAW ROUTINES
   function updateAirstrikes() {
     if (isIntroSequence) return;
-
     for (let i = airstrikes.length - 1; i >= 0; i--) {
       const strike = airstrikes[i];
       if (strike.warningTimer > 0) {
         strike.warningTimer--;
       } else if (!strike.exploded) {
         strike.exploded = true;
-
         triggerShake(10, 5);
         playSound('file', 'boom.mp3');
 
@@ -940,13 +1099,12 @@ var BattleSystem = (() => {
           if (ball !== strike.owner && !ball.isInvincible) {
             const baseDmg = strike.owner.hasTriggeredRage ? strike.damage * 1.5 : strike.damage;
             const dmg = Math.round(baseDmg * getDamageScale());
-
             const tookDmg = ball.takeDamage(dmg);
+
             if (tookDmg) {
               const angle = Math.atan2(ball.y - strike.y, ball.x - strike.x);
               ball.vx += Math.cos(angle) * 12;
               ball.vy += Math.sin(angle) * 12;
-
               hitTexts.push({ text: `💣 BOMB -${dmg}`, x: ball.x, y: ball.y - 30, life: 30, color: '#ff2200' });
             }
           }
@@ -1159,8 +1317,8 @@ var BattleSystem = (() => {
           const dist = Math.hypot(ball.x - p.x, ball.y - p.y);
           if (dist < ball.radius + p.radius) {
             const finalDmg = Math.round(p.damage * getDamageScale());
-
             const tookDmg = ball.takeDamage(finalDmg);
+
             if (tookDmg) {
               ball.vx += p.vx * 0.8;
               ball.vy += p.vy * 0.8;
@@ -1416,166 +1574,6 @@ var BattleSystem = (() => {
     });
   }
 
-  function spawnItems() {
-    if (isIntroSequence) return;
-    spawnTimer++;
-
-    const matchSec = Math.floor(matchTimer / 60);
-    const currentInterval = matchSec >= 60 ? 55 : (matchSec >= 30 ? 80 : 110);
-
-    if (spawnTimer % currentInterval === 0) {
-      const rand = seededRandom();
-      let itemType = 'ENERGY', icon = '⚡';
-
-      if (matchSec < 30) {
-        if (rand < 0.50) { itemType = 'ENERGY'; icon = '⚡'; }
-        else if (rand < 0.70) { itemType = 'HP'; icon = '💚'; }
-        else if (rand < 0.85) { itemType = 'SHIELD'; icon = '🛡️'; }
-        else { itemType = 'DASH'; icon = '💨'; }
-      } else if (matchSec < 60) {
-        if (rand < 0.65) { itemType = 'ENERGY'; icon = '⚡'; }
-        else if (rand < 0.80) { itemType = 'HP'; icon = '💚'; }
-        else if (rand < 0.88) { itemType = 'SHIELD'; icon = '🛡️'; }
-        else { itemType = 'DASH'; icon = '💨'; }
-      } else {
-        if (rand < 0.80) { itemType = 'ENERGY'; icon = '⚡'; }
-        else { itemType = 'DASH'; icon = '💨'; }
-      }
-
-      let safeX = 0, safeY = 0, isValid = false, attempts = 0;
-      while (!isValid && attempts < 25) {
-        attempts++;
-        safeX = 40 + seededRandom() * (SIM_WIDTH - 80);
-        safeY = 100 + seededRandom() * (SIM_HEIGHT - 180);
-        isValid = balls.every(b => Math.hypot(b.x - safeX, b.y - safeY) > b.radius + 50);
-      }
-
-      if (isValid) {
-        items.push({ x: safeX, y: safeY, type: itemType, icon: icon, radius: 18 });
-      }
-    }
-  }
-
-  function checkItemCollisions() {
-    if (isIntroSequence) return;
-    for (let i = items.length - 1; i >= 0; i--) {
-      const item = items[i];
-      balls.forEach(ball => {
-        const dist = Math.hypot(ball.x - item.x, ball.y - item.y);
-        if (dist < ball.radius + item.radius) {
-          if (item.type === 'HP') {
-            ball.hp = Math.min(ball.maxHp, ball.hp + 20);
-            hitTexts.push({ text: '+20 HP', x: ball.x, y: ball.y - 30, life: 30, color: '#05ffa1' });
-            playSound('file', 'healspawn.mp3');
-          } else if (item.type === 'ENERGY') {
-            if (ball.silenceTimer > 0) {
-              hitTexts.push({ text: '🔇 SILENCED!', x: ball.x, y: ball.y - 30, life: 30, color: '#ff0000' });
-            } else if (window.AbilitySystem) {
-              window.AbilitySystem.trigger(ball, 'ENERGY');
-              hitTexts.push({ text: ball.currentAbilityName || '⚡ ULTIMATE!', x: ball.x, y: ball.y - 30, life: 35, color: '#ffe600' });
-            }
-          } else if (item.type === 'SHIELD') {
-            ball.shieldTimer = 180;
-            hitTexts.push({ text: '🛡️ SHIELD!', x: ball.x, y: ball.y - 30, life: 30, color: '#00ffff' });
-            playSound('file', 'shieldspawn.mp3');
-          } else if (item.type === 'DASH') {
-            ball.dashTimer = 180;
-            hitTexts.push({ text: '💨 DASH!', x: ball.x, y: ball.y - 30, life: 30, color: '#ffaa00' });
-            playSound('file', 'dashspawn.mp3');
-          }
-          items.splice(i, 1);
-        }
-      });
-    }
-  }
-
-  function checkCollisions() {
-    if (balls.length < 2 || isGameOver || isIntroSequence) return;
-    const [b1, b2] = balls;
-
-    const dx = b2.x - b1.x;
-    const dy = b2.y - b1.y;
-    const dist = Math.hypot(dx, dy);
-    const minDist = b1.radius + b2.radius;
-
-    if (dist < minDist) {
-      const angle = Math.atan2(dy, dx);
-      const overlap = minDist - dist;
-      b1.x -= Math.cos(angle) * overlap * 0.5;
-      b1.y -= Math.sin(angle) * overlap * 0.5;
-      b2.x += Math.cos(angle) * overlap * 0.5;
-      b2.y += Math.sin(angle) * overlap * 0.5;
-
-      [b1.vx, b2.vx] = [b2.vx, b1.vx];
-      [b1.vy, b2.vy] = [b2.vy, b1.vy];
-
-      playSound('fx', 'collide');
-    }
-
-    checkWeaponHit(b1, b2);
-    checkWeaponHit(b2, b1);
-  }
-
-  function checkWeaponHit(attacker, defender) {
-    if (defender.cooldown > 0 || defender.isInvincible) return;
-
-    for (let i = 0; i < attacker.weaponCount; i++) {
-      const curAngle = attacker.weaponAngle + (i * (Math.PI * 2) / attacker.weaponCount);
-      const wPos = {
-        x: attacker.x + Math.cos(curAngle) * (attacker.weaponOrbitRadius + 20),
-        y: attacker.y + Math.sin(curAngle) * (attacker.weaponOrbitRadius + 20)
-      };
-
-      const dist = Math.hypot(defender.x - wPos.x, defender.y - wPos.y);
-
-      if (dist < defender.radius + 20) {
-        const baseDmg = (attacker.config.dmg || 8) * (attacker.damageMultiplier || 1.0);
-        const isCrit = attacker.hasTriggeredRage;
-        let dmg = Math.round((isCrit ? baseDmg * 1.5 : baseDmg) * getDamageScale());
-
-        const tookDmg = defender.takeDamage(dmg);
-        if (!tookDmg) return;
-
-        if (attacker.lifesteal && attacker.lifesteal > 0) {
-          attacker.hp = Math.min(attacker.maxHp, attacker.hp + (dmg * attacker.lifesteal));
-        }
-
-        defender.cooldown = 18;
-
-        if (!defender.zeroKnockbackFlag) {
-          const kAngle = Math.atan2(defender.y - wPos.y, defender.x - wPos.x);
-          const knockbackForce = isCrit ? 13 : 10;
-          defender.vx += Math.cos(kAngle) * knockbackForce;
-          defender.vy += Math.sin(kAngle) * knockbackForce;
-        }
-
-        if (isCrit) triggerShake(10, 6);
-        playSound('weapon', null, attacker.config.weapon);
-
-        hitTexts.push({
-          text: isCrit ? `CRIT -${dmg}` : `-${dmg}`,
-          x: defender.x,
-          y: defender.y - 30,
-          life: 28,
-          color: isCrit ? '#ff0033' : (attacker.isP1 ? '#00f0ff' : '#ff0055')
-        });
-        break;
-      }
-    }
-  }
-
-  function checkGameOver() {
-    if (isGameOver || isIntroSequence || balls.length < 2) return;
-
-    const loser = balls.find(b => b.hp <= 0 && b.lives <= 0);
-    if (loser) {
-      isGameOver = true;
-      const winner = balls.find(b => b !== loser) || loser;
-      triggerShake(20, 10);
-      playSound('fx', 'ko');
-    }
-  }
-
   // HEADLESS MATCH GENERATOR
   function generateReplay(p1Data, p2Data, seed = 123456789) {
     setSeed(seed);
@@ -1637,8 +1635,8 @@ var BattleSystem = (() => {
       }
 
       frames.push({
-        p1: { x: Math.round(balls[0].x * 10) / 10, y: Math.round(balls[0].y * 10) / 10, hp: Math.ceil(balls[0].hp), lives: balls[0].lives, wAngle: Math.round(balls[0].weaponAngle * 100) / 100, rage: balls[0].hasTriggeredRage },
-        p2: { x: Math.round(balls[1].x * 10) / 10, y: Math.round(balls[1].y * 10) / 10, hp: Math.ceil(balls[1].hp), lives: balls[1].lives, wAngle: Math.round(balls[1].weaponAngle * 100) / 100, rage: balls[1].hasTriggeredRage },
+        p1: { x: balls[0].x, y: balls[0].y, hp: Math.ceil(balls[0].hp), lives: balls[0].lives, wAngle: Math.round(balls[0].weaponAngle * 100) / 100, rage: balls[0].hasTriggeredRage },
+        p2: { x: balls[1].x, y: balls[1].y, hp: Math.ceil(balls[1].hp), lives: balls[1].lives, wAngle: Math.round(balls[1].weaponAngle * 100) / 100, rage: balls[1].hasTriggeredRage },
         items: items.map(it => ({ x: Math.round(it.x), y: Math.round(it.y), icon: it.icon })),
         projectiles: projectiles.map(pr => ({ x: Math.round(pr.x), y: Math.round(pr.y), type: pr.type, spinAngle: Math.round((pr.spinAngle || 0) * 10) / 10 })),
         hazards: hazards.map(h => ({ x: Math.round(h.x), y: Math.round(h.y), radius: h.radius, type: h.type })),
