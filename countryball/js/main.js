@@ -1,5 +1,5 @@
 // ==========================================
-// MAIN.JS - 3-STEP HANDSHAKE MULTIPLAYER ROUTER
+// MAIN.JS - FAIL-SAFE DIRECT MATCH ROUTER
 // ==========================================
 import { Multiplayer } from '../../shared/multiplayer.js';
 
@@ -18,7 +18,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let currentScreenName = 'start';
   let isMultiplayerActive = false;
-  let pendingMatchConfig = null;
 
   const myRole = () => (Multiplayer.isHost ? 'host' : 'guest');
 
@@ -30,6 +29,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         payload: { ...payload, senderRole: myRole() }
       });
     }
+  }
+
+  // FAIL-SAFE COUNTRY RESOLVER (PREVENTS GUEST NULL-POINTER STUCK)
+  function getCountryById(id) {
+    const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
+    if (!list || list.length === 0) return null;
+    if (!id) return list[0];
+    const found = list.find(c => c.id === id || (c.id && String(c.id).toLowerCase() === String(id).toLowerCase()));
+    return found || list[0];
   }
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -61,62 +69,36 @@ document.addEventListener('DOMContentLoaded', async () => {
           const { slot, countryId, senderRole } = payload.payload;
           if (senderRole === myRole()) return;
 
-          const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
-          const country = countryId ? list.find(c => c.id === countryId) : null;
-          
+          const country = getCountryById(countryId);
           if (typeof MenuSystem !== 'undefined' && MenuSystem.setSelection) {
             MenuSystem.setSelection(slot, country, true);
           }
         });
 
-        // 3. HANDSHAKE STEP 1 (GUEST RECEIVES PREPARE SIGNAL FROM HOST)
-        Multiplayer.channel.on('broadcast', { event: 'match_prepare' }, (payload) => {
+        // 3. START GAME BATTLE (DIRECT FAIL-SAFE TRIGGER)
+        Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
           const { p1Id, p2Id, seed, senderRole } = payload.payload;
           if (senderRole === myRole()) return;
+          if (currentScreenName === 'battle') return; // Avoid duplicate triggers
 
-          const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
-          const p1 = list.find(c => c.id === p1Id);
-          const p2 = list.find(c => c.id === p2Id);
-
-          if (p1 && p2) {
-            pendingMatchConfig = { p1, p2, seed };
-            // STEP 2: GUEST CONFIRMS READY BACK TO HOST
-            sendBroadcast('guest_ready', { seed });
-          }
+          const p1 = getCountryById(p1Id);
+          const p2 = getCountryById(p2Id);
+          launchMatch(p1, p2, seed);
         });
 
-        // 4. HANDSHAKE STEP 2 (HOST RECEIVES GUEST CONFIRMATION)
-        Multiplayer.channel.on('broadcast', { event: 'guest_ready' }, (payload) => {
-          const { senderRole } = payload.payload;
-          if (senderRole === myRole()) return;
-
-          if (Multiplayer.isHost && pendingMatchConfig) {
-            // STEP 3: HOST SENDS FINAL START COMMAND TO BOTH
-            sendBroadcast('match_start', { seed: pendingMatchConfig.seed });
-            launchMatch(pendingMatchConfig.p1, pendingMatchConfig.p2, pendingMatchConfig.seed);
-          }
-        });
-
-        // 5. HANDSHAKE STEP 3 (GUEST RECEIVES START SIGNAL AND LAUNCHES)
-        Multiplayer.channel.on('broadcast', { event: 'match_start' }, (payload) => {
-          const { senderRole } = payload.payload;
-          if (senderRole === myRole()) return;
-
-          if (pendingMatchConfig) {
-            launchMatch(pendingMatchConfig.p1, pendingMatchConfig.p2, pendingMatchConfig.seed);
-          }
-        });
-
-        // Rematch & Re-select Routers
+        // 4. REMATCH BATTLE
         Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
           const { seed, senderRole } = payload.payload;
           if (senderRole === myRole()) return;
+          if (currentScreenName === 'battle') return;
 
           const selections = MenuSystem.getSelections();
-          if (screenWinner) screenWinner.classList.add('hidden');
-          launchMatch(selections.p1, selections.p2, seed);
+          const p1 = selections.p1 || getCountryById(null);
+          const p2 = selections.p2 || getCountryById(null);
+          launchMatch(p1, p2, seed);
         });
 
+        // 5. RE-SELECT MENU
         Multiplayer.channel.on('broadcast', { event: 'select_again' }, (payload) => {
           if (payload.payload && payload.payload.senderRole === myRole()) return;
           currentScreenName = 'menu';
@@ -187,9 +169,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function handlePressStart() {
     if (currentScreenName !== 'start') return;
+
     try {
-      if (window.AudioSystem && window.AudioSystem.play) window.AudioSystem.play('click');
+      if (window.AudioSystem && window.AudioSystem.play) {
+        window.AudioSystem.play('click');
+      }
     } catch (e) {}
+
     sendBroadcast('press_start_menu');
     openMenuScreen();
   }
@@ -203,9 +189,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   window.addEventListener('keydown', handlePressStart);
 
-  // LAUNCH MATCH EXECUTION ENGINE
+  // UNIFIED MATCH LAUNCHER
   function launchMatch(p1, p2, matchSeed) {
     currentScreenName = 'battle';
+    if (screenStart) screenStart.classList.add('hidden');
     if (screenMenu) screenMenu.classList.add('hidden');
     if (screenWinner) screenWinner.classList.add('hidden');
 
@@ -219,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // START FIGHT BUTTON (HOST INITIATES HANDSHAKE)
+  // START FIGHT BUTTON (HOST SENDS DUAL BROADCAST)
   if (btnFight) {
     btnFight.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
@@ -233,29 +220,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (e) {}
 
       const matchSeed = Math.floor(Math.random() * 2147483647);
+      const startPayload = {
+        p1Id: selections.p1.id,
+        p2Id: selections.p2.id,
+        seed: matchSeed
+      };
 
       if (isMultiplayerActive && Multiplayer.isHost) {
-        pendingMatchConfig = { p1: selections.p1, p2: selections.p2, seed: matchSeed };
-        // STEP 1: HOST SENDS PREPARE SIGNAL TO GUEST
-        sendBroadcast('match_prepare', {
-          p1Id: selections.p1.id,
-          p2Id: selections.p2.id,
-          seed: matchSeed
-        });
-      } else {
-        // LOCAL PLAY
-        launchMatch(selections.p1, selections.p2, matchSeed);
+        // Send primary broadcast immediately
+        sendBroadcast('start_game_battle', startPayload);
+        // Send backup retry broadcast after 300ms to guarantee packet delivery
+        setTimeout(() => sendBroadcast('start_game_battle', startPayload), 300);
       }
+
+      launchMatch(selections.p1, selections.p2, matchSeed);
     });
   }
 
+  // REMATCH BUTTON
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
       const matchSeed = Math.floor(Math.random() * 2147483647);
+      const rematchPayload = { seed: matchSeed };
 
       if (isMultiplayerActive && Multiplayer.isHost) {
-        sendBroadcast('rematch_battle', { seed: matchSeed });
+        sendBroadcast('rematch_battle', rematchPayload);
+        setTimeout(() => sendBroadcast('rematch_battle', rematchPayload), 300);
       }
 
       launchMatch(selections.p1, selections.p2, matchSeed);
