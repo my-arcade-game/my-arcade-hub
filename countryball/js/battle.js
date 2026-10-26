@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - DETERMINISTIC SIMULATION ENGINE (FULL EFFECT SERIALIZATION)
+// BATTLE.JS - FULL PASSIVE HOOK & SIMULATION ENGINE
 // ==========================================
 
 var BattleSystem = (() => {
@@ -155,6 +155,12 @@ var BattleSystem = (() => {
       this.passiveTimer = 0; 
       this.turtleShellTimer = 0; 
       this.zeroKnockbackFlag = false;
+
+      // INITIALIZE PASSIVE STATS AND HOOKS
+      const pass = window.PassiveSystem && window.PassiveSystem[this.passiveName];
+      if (pass && pass.onInit) {
+        pass.onInit(this);
+      }
     }
 
     assignPassive(config) {
@@ -198,8 +204,9 @@ var BattleSystem = (() => {
 
       const pass = window.PassiveSystem && window.PassiveSystem[this.passiveName];
       if (pass && pass.onDamage) {
-        const evades = pass.onDamage(this, amount);
-        if (evades) {
+        const res = pass.onDamage(this, amount);
+        if (res === true) {
+          // Ninjutsu / Dodge Evasion
           specialEffects.push({
             type: 'substitution_log',
             x: this.x,
@@ -207,8 +214,13 @@ var BattleSystem = (() => {
             life: 30
           });
           return false;
+        } else if (typeof res === 'number') {
+          // Great Wall / Defense Budget Damage Reduction
+          amount = res;
         }
       }
+
+      if (amount <= 0) return false;
 
       this.hp -= amount; 
 
