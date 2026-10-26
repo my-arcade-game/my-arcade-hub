@@ -1,5 +1,5 @@
 // ==========================================
-// MAIN.JS - MULTIPLAYER REMATCH & SYNC FIX
+// MAIN.JS - MULTIPLAYER 2-WAY REMATCH HANDSHAKE
 // ==========================================
 import { Multiplayer } from '../../shared/multiplayer.js';
 
@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isMultiplayerActive = false;
   let lastMatchFighters = { p1: null, p2: null };
 
+  // REMATCH READY HANDSHAKE FLAGS
+  let isHostRematchReady = false;
+  let isGuestRematchReady = false;
+
   const myRole = () => (Multiplayer.isHost ? 'host' : 'guest');
 
   function sendBroadcast(eventName, payload = {}) {
@@ -38,6 +42,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!id) return list[0];
     const found = list.find(c => c.id === id || (c.id && String(c.id).toLowerCase() === String(id).toLowerCase()));
     return found || list[0];
+  }
+
+  function resetRematchState() {
+    isHostRematchReady = false;
+    isGuestRematchReady = false;
+    if (btnRematch) {
+      btnRematch.innerText = 'REMATCH';
+      btnRematch.disabled = false;
+      btnRematch.style.opacity = '1.0';
+    }
+  }
+
+  function updateRematchUI() {
+    if (!btnRematch) return;
+    const amIReady = Multiplayer.isHost ? isHostRematchReady : isGuestRematchReady;
+    const isOtherReady = Multiplayer.isHost ? isGuestRematchReady : isHostRematchReady;
+
+    if (amIReady && !isOtherReady) {
+      btnRematch.innerText = 'WAITING FOR OPPONENT... (1/2)';
+      btnRematch.disabled = true;
+      btnRematch.style.opacity = '0.7';
+    } else if (!amIReady && isOtherReady) {
+      btnRematch.innerText = 'OPPONENT READY! CLICK TO REMATCH';
+      btnRematch.disabled = false;
+      btnRematch.style.opacity = '1.0';
+    }
+  }
+
+  function checkAndStartRematch() {
+    if (isHostRematchReady && isGuestRematchReady && Multiplayer.isHost) {
+      let p1 = lastMatchFighters.p1;
+      let p2 = lastMatchFighters.p2;
+
+      if (!p1 || !p2) {
+        const selections = MenuSystem.getSelections();
+        p1 = selections.p1 || getCountryById(null);
+        p2 = selections.p2 || getCountryById(null);
+      }
+
+      const matchSeed = Math.floor(Math.random() * 2147483647);
+      const rematchPayload = {
+        p1Id: p1.id,
+        p2Id: p2.id,
+        seed: matchSeed
+      };
+
+      sendBroadcast('rematch_battle', rematchPayload);
+      setTimeout(() => sendBroadcast('rematch_battle', rematchPayload), 300);
+
+      resetRematchState();
+      launchMatch(p1, p2, matchSeed);
+    }
   }
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -79,29 +135,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 
           const p1 = getCountryById(p1Id);
           const p2 = getCountryById(p2Id);
+          resetRematchState();
           launchMatch(p1, p2, seed);
         });
 
-        // LISTEN FOR GUEST REMATCH REQUEST (HOST ONLY)
-        Multiplayer.channel.on('broadcast', { event: 'request_rematch' }, (payload) => {
-          if (payload.payload && payload.payload.senderRole === myRole()) return;
-          if (Multiplayer.isHost) {
-            triggerRematchExecution();
-          }
+        // 1. LISTEN FOR PLAYER READY REMATCH SIGNAL
+        Multiplayer.channel.on('broadcast', { event: 'player_rematch_ready' }, (payload) => {
+          const { senderRole } = payload.payload;
+          if (senderRole === myRole()) return;
+
+          if (senderRole === 'host') isHostRematchReady = true;
+          if (senderRole === 'guest') isGuestRematchReady = true;
+
+          updateRematchUI();
+          checkAndStartRematch();
         });
 
-        // REMATCH BATTLE SYNC WITH FIGHTER IDS & SEED
+        // 2. LISTEN FOR BOTH READY REMATCH START COMMAND
         Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
           const { p1Id, p2Id, seed, senderRole } = payload.payload;
           if (senderRole === myRole()) return;
 
           const p1 = getCountryById(p1Id) || lastMatchFighters.p1;
           const p2 = getCountryById(p2Id) || lastMatchFighters.p2;
+
+          resetRematchState();
           launchMatch(p1, p2, seed);
         });
 
         Multiplayer.channel.on('broadcast', { event: 'select_again' }, (payload) => {
           if (payload.payload && payload.payload.senderRole === myRole()) return;
+          resetRematchState();
           currentScreenName = 'menu';
           if (screenWinner) screenWinner.classList.add('hidden');
           if (screenMenu) screenMenu.classList.remove('hidden');
@@ -203,31 +267,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function triggerRematchExecution() {
-    let p1 = lastMatchFighters.p1;
-    let p2 = lastMatchFighters.p2;
-
-    if (!p1 || !p2) {
-      const selections = MenuSystem.getSelections();
-      p1 = selections.p1 || getCountryById(null);
-      p2 = selections.p2 || getCountryById(null);
-    }
-
-    const matchSeed = Math.floor(Math.random() * 2147483647);
-    const rematchPayload = {
-      p1Id: p1.id,
-      p2Id: p2.id,
-      seed: matchSeed
-    };
-
-    if (isMultiplayerActive) {
-      sendBroadcast('rematch_battle', rematchPayload);
-      setTimeout(() => sendBroadcast('rematch_battle', rematchPayload), 300);
-    }
-
-    launchMatch(p1, p2, matchSeed);
-  }
-
   if (btnFight) {
     btnFight.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
@@ -252,10 +291,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => sendBroadcast('start_game_battle', startPayload), 300);
       }
 
+      resetRematchState();
       launchMatch(selections.p1, selections.p2, matchSeed);
     });
   }
 
+  // REMATCH BUTTON CLICK LOGIC (2-WAY READY CHECK)
   if (btnRematch) {
     btnRematch.addEventListener('click', () => {
       try {
@@ -264,10 +305,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } catch (e) {}
 
-      if (isMultiplayerActive && !Multiplayer.isHost) {
-        sendBroadcast('request_rematch');
+      if (isMultiplayerActive) {
+        if (Multiplayer.isHost) {
+          isHostRematchReady = true;
+        } else {
+          isGuestRematchReady = true;
+        }
+
+        updateRematchUI();
+        sendBroadcast('player_rematch_ready');
+        checkAndStartRematch();
       } else {
-        triggerRematchExecution();
+        // LOCAL PLAY
+        let p1 = lastMatchFighters.p1;
+        let p2 = lastMatchFighters.p2;
+
+        if (!p1 || !p2) {
+          const selections = MenuSystem.getSelections();
+          p1 = selections.p1 || getCountryById(null);
+          p2 = selections.p2 || getCountryById(null);
+        }
+
+        const matchSeed = Math.floor(Math.random() * 2147483647);
+        launchMatch(p1, p2, matchSeed);
       }
     });
   }
@@ -275,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (btnSelect) {
     btnSelect.addEventListener('click', () => {
       sendBroadcast('select_again');
+      resetRematchState();
 
       currentScreenName = 'menu';
       if (screenWinner) screenWinner.classList.add('hidden');
@@ -293,6 +354,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function showWinner(winner) {
     currentScreenName = 'winner';
+    resetRematchState();
+
     const winnerFlagImg = document.getElementById('winner-flag-img');
     const winnerName = document.getElementById('winner-name');
     const winnerHp = document.getElementById('winner-hp');
