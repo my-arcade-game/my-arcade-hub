@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - GPU-CACHED EMOJIS, STABLE ULT SYSTEM & HOST-AUTHORITATIVE MULTIPLAYER SYNC
+// BATTLE.JS - GPU-CACHED EMOJIS, STABLE ULT SYSTEM & FIXED HOST-AUTHORITATIVE MULTIPLAYER SYNC
 // ==========================================
 
 var BattleSystem = (() => {
@@ -752,7 +752,7 @@ var BattleSystem = (() => {
   function drawGhosts() {
     ghosts.forEach(g => {
       ctx.save();
-      ctx.translate(g.x, g.y - 15);
+      ctx.translate(g.x || 0, (g.y || 0) - 15);
       drawCachedEmoji(ctx, '👻', 28);
       ctx.restore();
     });
@@ -1189,8 +1189,8 @@ var BattleSystem = (() => {
         p.vy += Math.sin(Date.now() * 0.01) * p.curve;
       }
 
-      p.x += p.vx;
-      p.y += p.vy;
+      p.x += (p.vx || 0);
+      p.y += (p.vy || 0);
 
       if (p.type === 'baguette' || p.type === 'keris_dagger') {
         p.life--;
@@ -1218,12 +1218,12 @@ var BattleSystem = (() => {
         if (ball !== p.owner && !ball.isInvincible) {
           const dist = Math.hypot(ball.x - p.x, ball.y - p.y);
           if (dist < ball.radius + p.radius) {
-            const finalDmg = Math.round(p.damage * getDamageScale());
+            const finalDmg = Math.round((p.damage || 5) * getDamageScale());
 
             const tookDmg = ball.takeDamage(finalDmg);
             if (tookDmg) {
-              ball.vx += p.vx * 0.8;
-              ball.vy += p.vy * 0.8;
+              ball.vx += (p.vx || 0) * 0.8;
+              ball.vy += (p.vy || 0) * 0.8;
               hitTexts.push({ text: `-${finalDmg}`, x: ball.x, y: ball.y - 25, life: 25, color: '#ff0055' });
               hit = true;
             }
@@ -1238,12 +1238,14 @@ var BattleSystem = (() => {
   function drawProjectiles() {
     projectiles.forEach(p => {
       ctx.save();
-      ctx.translate(p.x, p.y);
+      ctx.translate(p.x || 0, p.y || 0);
       if (p.type === 'baguette') {
         ctx.rotate(p.spinAngle || 0);
         drawCachedEmoji(ctx, '🥖', 32);
       } else if (p.type === 'keris_dagger') {
-        ctx.rotate(Math.atan2(p.vy, p.vx) + Math.PI / 2);
+        const vx = p.vx || 0.001;
+        const vy = p.vy || 0.001;
+        ctx.rotate(Math.atan2(vy, vx) + Math.PI / 2);
         drawCachedEmoji(ctx, '🗡️', 34);
       } else if (p.type === 'pizza_cutter') {
         ctx.rotate(p.spinAngle || 0);
@@ -1344,7 +1346,7 @@ var BattleSystem = (() => {
         ctx.stroke();
       } else if (eff.type === 'cherry_blossom_flash') {
         const elapsed = eff.maxLife - eff.life;
-        const target = eff.target;
+        const target = eff.target || { x: 0, y: 0 };
 
         for (let p = 0; p < 8; p++) {
           const px = (target.x + Math.sin(elapsed * 0.1 + p) * 100) % canvas.width;
@@ -1361,8 +1363,8 @@ var BattleSystem = (() => {
         ctx.fillStyle = `rgba(255, 30, 0, ${Math.sin(progress * Math.PI) * 0.35})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const target = eff.target;
-        const owner = eff.owner;
+        const target = eff.target || { x: 0, y: 0 };
+        const owner = eff.owner || { x: 0, y: 0 };
         const startX = owner.x;
         const startY = owner.y;
 
@@ -1436,7 +1438,7 @@ var BattleSystem = (() => {
     loop();
   }
 
-  // Packaging current state into compact transmission payload
+  // Safe packaging of physical state into compact payload
   function getHostSyncSnapshot() {
     return {
       t: matchTimer,
@@ -1458,7 +1460,7 @@ var BattleSystem = (() => {
         hyp: b.hypnosisTimer || 0
       })),
       it: items.map(i => ({ x: Math.round(i.x), y: Math.round(i.y), type: i.type, icon: i.icon, radius: i.radius })),
-      p: projectiles.map(p => ({ x: Math.round(p.x), y: Math.round(p.y), type: p.type, spinAngle: p.spinAngle || 0, radius: p.radius || 15 })),
+      p: projectiles.map(p => ({ x: Math.round(p.x), y: Math.round(p.y), vx: Math.round((p.vx || 0) * 10) / 10, vy: Math.round((p.vy || 0) * 10) / 10, type: p.type, spinAngle: Math.round((p.spinAngle || 0) * 100) / 100, radius: p.radius || 15 })),
       hz: hazards.map(h => ({ x: Math.round(h.x), y: Math.round(h.y), type: h.type, radius: h.radius })),
       as: airstrikes.map(a => ({ x: Math.round(a.x), y: Math.round(a.y), radius: a.radius, warningTimer: a.warningTimer, exploded: a.exploded })),
       gh: ghosts.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), attached: g.attached })),
@@ -1466,7 +1468,7 @@ var BattleSystem = (() => {
     };
   }
 
-  // Applying snapshot received from Host on Guest device
+  // Applying snapshot safely on Guest device
   function applyHostSync(snapshot) {
     if (!snapshot) return;
     if (snapshot.t !== undefined) matchTimer = snapshot.t;
@@ -1785,7 +1787,7 @@ var BattleSystem = (() => {
       ctx.translate(dx, dy);
     }
 
-    // Only Host computes collision, timers, and physics updates
+    // Host calculates physics engine and timer
     if (!isGameOver && !isIntroSequence) {
       if (!isMultiplayerActive || isHostPlayer) {
         matchTimer++;
@@ -1809,10 +1811,10 @@ var BattleSystem = (() => {
         checkCollisions();
         checkGameOver();
 
-        // Send physics snapshot to Guest every 2 frames (~30 FPS)
+        // Broadcast snapshot to Guest every 4 frames (15 FPS rate to avoid WebSocket congestion)
         if (isMultiplayerActive && isHostPlayer && window.Multiplayer && window.Multiplayer.channel) {
           syncFrameCounter++;
-          if (syncFrameCounter % 2 === 0) {
+          if (syncFrameCounter % 4 === 0) {
             window.Multiplayer.channel.send({
               type: 'broadcast',
               event: 'battle_sync',
