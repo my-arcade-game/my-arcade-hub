@@ -1,4 +1,3 @@
-// /countryball/js/main.js
 import { Multiplayer } from '../../shared/multiplayer.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -53,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // Broadcast: Start fight
+        // Broadcast: Start fight (Passed Host status into BattleSystem)
         Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
           const { p1Id, p2Id } = payload.payload;
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
@@ -67,8 +66,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (window.BattleSystem) {
               BattleSystem.start(p1, p2, (winner) => {
                 showWinner(winner);
-              });
+              }, true, Multiplayer.isHost);
             }
+          }
+        });
+
+        // Broadcast: Receive continuous Host physics snapshot (Guest synchronization)
+        Multiplayer.channel.on('broadcast', { event: 'battle_sync' }, (payload) => {
+          if (!Multiplayer.isHost && window.BattleSystem && window.BattleSystem.applyHostSync) {
+            window.BattleSystem.applyHostSync(payload.payload);
           }
         });
 
@@ -81,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             setRandomBackground();
             BattleSystem.start(selections.p1, selections.p2, (winner) => {
               showWinner(winner);
-            });
+            }, true, Multiplayer.isHost);
           }
         });
 
@@ -216,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     openMenuScreen();
   }
 
-  // GLOBAL TAP & CLICK LISTENERS (Guarantees splash screen responds to tap anywhere)
+  // GLOBAL TAP & CLICK LISTENERS
   if (screenStart) {
     screenStart.addEventListener('click', handlePressStart);
     screenStart.addEventListener('pointerdown', handlePressStart);
@@ -257,7 +263,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setRandomBackground();
         BattleSystem.start(selections.p1, selections.p2, (winner) => {
           showWinner(winner);
-        });
+        }, isMultiplayerActive, Multiplayer.isHost);
       }
     });
   }
@@ -280,7 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setRandomBackground();
         BattleSystem.start(selections.p1, selections.p2, (winner) => {
           showWinner(winner);
-        });
+        }, isMultiplayerActive, Multiplayer.isHost);
       }
     });
   }

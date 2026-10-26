@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - GPU-CACHED EMOJIS & STABLE ULT SYSTEM
+// BATTLE.JS - GPU-CACHED EMOJIS, STABLE ULT SYSTEM & HOST-AUTHORITATIVE MULTIPLAYER SYNC
 // ==========================================
 
 var BattleSystem = (() => {
@@ -24,6 +24,11 @@ var BattleSystem = (() => {
   let matchTimer = 0;
   let suddenDeathTriggered = false;
   let rgbHue = 0;
+
+  // Real-time Host Synchronization Control State
+  let isMultiplayerActive = false;
+  let isHostPlayer = false;
+  let syncFrameCounter = 0;
 
   const GLOBAL_SPEED_MULT = 1.35;
 
@@ -1394,7 +1399,12 @@ var BattleSystem = (() => {
     });
   }
 
-  function start(p1Data, p2Data, callback) {
+  // UPDATED START SIGNATURE FOR MULTIPLAYER HOST/GUEST STATUS
+  function start(p1Data, p2Data, callback, isMP = false, host = false) {
+    isMultiplayerActive = isMP;
+    isHostPlayer = host;
+    syncFrameCounter = 0;
+
     onBattleComplete = callback;
     isGameOver = false;
     spawnTimer = 0;
@@ -1424,6 +1434,70 @@ var BattleSystem = (() => {
 
     triggerIntroBanner();
     loop();
+  }
+
+  // Packaging current state into compact transmission payload
+  function getHostSyncSnapshot() {
+    return {
+      t: matchTimer,
+      b: balls.map(b => ({
+        x: Math.round(b.x * 10) / 10,
+        y: Math.round(b.y * 10) / 10,
+        vx: Math.round(b.vx * 10) / 10,
+        vy: Math.round(b.vy * 10) / 10,
+        hp: Math.round(b.hp * 10) / 10,
+        maxHp: b.maxHp,
+        lives: b.lives,
+        wa: Math.round(b.weaponAngle * 100) / 100,
+        rage: b.hasTriggeredRage ? 1 : 0,
+        sh: b.shieldTimer || 0,
+        imm: b.immunityTimer || 0,
+        st: b.stunTimer || 0,
+        inv: b.invisibleTimer || 0,
+        br: b.burnTimer || 0,
+        hyp: b.hypnosisTimer || 0
+      })),
+      it: items.map(i => ({ x: Math.round(i.x), y: Math.round(i.y), type: i.type, icon: i.icon, radius: i.radius })),
+      p: projectiles.map(p => ({ x: Math.round(p.x), y: Math.round(p.y), type: p.type, spinAngle: p.spinAngle || 0, radius: p.radius || 15 })),
+      hz: hazards.map(h => ({ x: Math.round(h.x), y: Math.round(h.y), type: h.type, radius: h.radius })),
+      as: airstrikes.map(a => ({ x: Math.round(a.x), y: Math.round(a.y), radius: a.radius, warningTimer: a.warningTimer, exploded: a.exploded })),
+      gh: ghosts.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), attached: g.attached })),
+      ht: hitTexts.map(t => ({ text: t.text, x: Math.round(t.x), y: Math.round(t.y), life: t.life, color: t.color }))
+    };
+  }
+
+  // Applying snapshot received from Host on Guest device
+  function applyHostSync(snapshot) {
+    if (!snapshot) return;
+    if (snapshot.t !== undefined) matchTimer = snapshot.t;
+
+    if (snapshot.b && snapshot.b.length === balls.length) {
+      snapshot.b.forEach((data, idx) => {
+        const b = balls[idx];
+        b.x = data.x;
+        b.y = data.y;
+        b.vx = data.vx;
+        b.vy = data.vy;
+        b.hp = data.hp;
+        b.maxHp = data.maxHp;
+        b.lives = data.lives;
+        b.weaponAngle = data.wa;
+        b.hasTriggeredRage = data.rage === 1;
+        b.shieldTimer = data.sh;
+        b.immunityTimer = data.imm;
+        b.stunTimer = data.st;
+        b.invisibleTimer = data.inv;
+        b.burnTimer = data.br;
+        b.hypnosisTimer = data.hyp;
+      });
+    }
+
+    if (snapshot.it) items = snapshot.it;
+    if (snapshot.p) projectiles = snapshot.p;
+    if (snapshot.hz) hazards = snapshot.hz;
+    if (snapshot.as) airstrikes = snapshot.as;
+    if (snapshot.gh) ghosts = snapshot.gh;
+    if (snapshot.ht) hitTexts = snapshot.ht;
   }
 
   function checkGameOver() {
@@ -1648,10 +1722,10 @@ var BattleSystem = (() => {
     ctx.restore();
   }
 
-function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
+  function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.save();
 
-    // 1. Header Text (Left-aligned over health bar, clip-free for mobile WebKit emojis)
+    // Header Text
     ctx.font = '900 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = color;
     ctx.textBaseline = 'bottom';
@@ -1663,7 +1737,6 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     const flagStr = flag || '';
     const displayName = `${name} ${flagStr} ${hearts}`.trim();
 
-    // Auto-scale font if text exceeds health bar width
     const textWidth = ctx.measureText(displayName).width;
     const maxAllowedWidth = w - 2;
 
@@ -1678,7 +1751,7 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.fillText(displayName, 0, 0);
     ctx.restore();
 
-    // 2. Health Bar rendering
+    // Health Bar fill & border
     ctx.fillStyle = '#111625';
     ctx.fillRect(x, y, w, h);
 
@@ -1697,7 +1770,10 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     ctx.fillText(`${Math.ceil(hp)}/${maxHp}`, x + w / 2, y + h / 2 + 1);
 
     ctx.restore();
-  }function loop() {
+  }
+
+  // MAIN GAME RENDER & PHYSICS LOOP
+  function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.save();
@@ -1709,27 +1785,42 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
       ctx.translate(dx, dy);
     }
 
+    // Only Host computes collision, timers, and physics updates
     if (!isGameOver && !isIntroSequence) {
-      matchTimer++;
+      if (!isMultiplayerActive || isHostPlayer) {
+        matchTimer++;
 
-      const matchSec = Math.floor(matchTimer / 60);
+        const matchSec = Math.floor(matchTimer / 60);
 
-      if (matchSec >= 60 && !suddenDeathTriggered) {
-        suddenDeathTriggered = true;
-        triggerCustomBanner('⚡ SUDDEN DEATH: FAST ULTS / EPIC OVERDRIVE! ⚡', 'rgba(180, 0, 0, 0.95)', '#ff0055');
+        if (matchSec >= 60 && !suddenDeathTriggered) {
+          suddenDeathTriggered = true;
+          triggerCustomBanner('⚡ SUDDEN DEATH: FAST ULTS / EPIC OVERDRIVE! ⚡', 'rgba(180, 0, 0, 0.95)', '#ff0055');
+        }
+
+        spawnItems();
+        checkItemCollisions();
+        updateAirstrikes();
+        updateHazards();
+        updateObstacles();
+        updateGhosts();
+        updateKerisDaggers();
+        updateProjectiles();
+        updateSpecialEffects();
+        checkCollisions();
+        checkGameOver();
+
+        // Send physics snapshot to Guest every 2 frames (~30 FPS)
+        if (isMultiplayerActive && isHostPlayer && window.Multiplayer && window.Multiplayer.channel) {
+          syncFrameCounter++;
+          if (syncFrameCounter % 2 === 0) {
+            window.Multiplayer.channel.send({
+              type: 'broadcast',
+              event: 'battle_sync',
+              payload: getHostSyncSnapshot()
+            });
+          }
+        }
       }
-
-      spawnItems();
-      checkItemCollisions();
-      updateAirstrikes();
-      updateHazards();
-      updateObstacles();
-      updateGhosts();
-      updateKerisDaggers();
-      updateProjectiles();
-      updateSpecialEffects();
-      checkCollisions();
-      checkGameOver();
     }
 
     drawHazards();
@@ -1741,7 +1832,9 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
     drawSpecialEffects();
 
     balls.forEach(b => {
-      b.update();
+      if (!isMultiplayerActive || isHostPlayer) {
+        b.update();
+      }
       b.draw();
     });
 
@@ -1778,6 +1871,7 @@ function drawBar(x, y, w, h, hp, maxHp, color, name, flag, isLeft, lives = 2) {
 
   const apiExports = {
     start,
+    applyHostSync,
     spawnOrbitingKeris,
     spawnNapalmStrike,
     spawnTeapotSpill,
