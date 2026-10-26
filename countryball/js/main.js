@@ -1,5 +1,5 @@
 // ==========================================
-// MAIN.JS - HOST REPLAY GENERATION & GUEST PLAYBACK ROUTER
+// MAIN.JS - LIGHTWEIGHT SEED BROADCAST ROUTER
 // ==========================================
 import { Multiplayer } from '../../shared/multiplayer.js';
 
@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentScreenName = 'start';
   let isMultiplayerActive = false;
 
-  // Safe Broadcast Helper
   function sendBroadcastSafely(eventName, payload) {
     if (isMultiplayerActive && Multiplayer.channel && Multiplayer.channel.state === 'joined') {
       Multiplayer.channel.send({
@@ -38,7 +37,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // 1. MULTIPLAYER SETUP
   const urlParams = new URLSearchParams(window.location.search);
   const roomCode = urlParams.get('room');
 
@@ -56,7 +54,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         MenuSystem.init({ active: true, isHost: Multiplayer.isHost });
       }
 
-      // Realtime Broadcast Listeners
       if (Multiplayer.channel) {
         Multiplayer.channel.on('broadcast', { event: 'press_start_menu' }, () => {
           openMenuScreen();
@@ -71,9 +68,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // GUEST RECEIVES HOST REPLAY DATA & STARTS PLAYBACK
+        // GUEST RECEIVES TINY SEED PAYLOAD & GENERATES REPLAY LOCALLY IN 10ms
         Multiplayer.channel.on('broadcast', { event: 'start_game_battle' }, (payload) => {
-          const { p1Id, p2Id, replayData, seed } = payload.payload;
+          const { p1Id, p2Id, seed } = payload.payload;
           const list = window.COUNTRIES || (typeof COUNTRIES !== 'undefined' ? COUNTRIES : []);
           const p1 = list.find(c => c.id === p1Id);
           const p2 = list.find(c => c.id === p2Id);
@@ -84,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             setRandomBackground(seed);
 
             if (window.BattleSystem) {
+              const replayData = BattleSystem.generateReplay(p1, p2, seed);
               BattleSystem.startPlayback(replayData, p1, p2, (winner) => {
                 showWinner(winner);
               });
@@ -91,15 +89,16 @@ document.addEventListener('DOMContentLoaded', async () => {
           }
         });
 
-        // REMATCH WITH NEW HOST REPLAY DATA
+        // REMATCH LISTENER (SEED ONLY)
         Multiplayer.channel.on('broadcast', { event: 'rematch_battle' }, (payload) => {
-          const { replayData, seed } = payload.payload;
+          const { seed } = payload.payload;
           currentScreenName = 'battle';
           const selections = MenuSystem.getSelections();
           if (screenWinner) screenWinner.classList.add('hidden');
 
           if (window.BattleSystem) {
             setRandomBackground(seed);
+            const replayData = BattleSystem.generateReplay(selections.p1, selections.p2, seed);
             BattleSystem.startPlayback(replayData, selections.p1, selections.p2, (winner) => {
               showWinner(winner);
             });
@@ -210,25 +209,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const matchSeed = Math.floor(Math.random() * 2147483647);
 
-      let replayData = null;
-
-      if (isMultiplayerActive) {
-        if (Multiplayer.isHost) {
-          // HOST SIMULATES ENTIRE MATCH HEADLESS IN MEMORY (~10ms)
-          replayData = BattleSystem.generateReplay(selections.p1, selections.p2, matchSeed);
-
-          // HOST BROADCASTS REPLAY DATA TO GUEST
-          sendBroadcastSafely('start_game_battle', {
-            p1Id: selections.p1.id,
-            p2Id: selections.p2.id,
-            replayData: replayData,
-            seed: matchSeed
-          });
-        }
-      } else {
-        // LOCAL / SOLO PLAY
-        replayData = BattleSystem.generateReplay(selections.p1, selections.p2, matchSeed);
+      if (isMultiplayerActive && Multiplayer.isHost) {
+        // BROADCAST TINY SEED ONLY (~100 BYTES) TO PREVENT WEBSOCKET DROPS
+        sendBroadcastSafely('start_game_battle', {
+          p1Id: selections.p1.id,
+          p2Id: selections.p2.id,
+          seed: matchSeed
+        });
       }
+
+      const replayData = BattleSystem.generateReplay(selections.p1, selections.p2, matchSeed);
 
       currentScreenName = 'battle';
       if (screenMenu) screenMenu.classList.add('hidden');
@@ -247,14 +237,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnRematch.addEventListener('click', () => {
       const selections = MenuSystem.getSelections();
       const matchSeed = Math.floor(Math.random() * 2147483647);
-      let replayData = null;
 
       if (isMultiplayerActive && Multiplayer.isHost) {
-        replayData = BattleSystem.generateReplay(selections.p1, selections.p2, matchSeed);
-        sendBroadcastSafely('rematch_battle', { replayData: replayData, seed: matchSeed });
-      } else if (!isMultiplayerActive) {
-        replayData = BattleSystem.generateReplay(selections.p1, selections.p2, matchSeed);
+        sendBroadcastSafely('rematch_battle', { seed: matchSeed });
       }
+
+      const replayData = BattleSystem.generateReplay(selections.p1, selections.p2, matchSeed);
 
       currentScreenName = 'battle';
       if (screenWinner) screenWinner.classList.add('hidden');
