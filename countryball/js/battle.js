@@ -1,5 +1,5 @@
 // ==========================================
-// BATTLE.JS - STRICT DETERMINISTIC SIMULATION ENGINE
+// BATTLE.JS - DETERMINISTIC SIMULATION ENGINE (FULL EFFECT SERIALIZATION)
 // ==========================================
 
 var BattleSystem = (() => {
@@ -199,7 +199,15 @@ var BattleSystem = (() => {
       const pass = window.PassiveSystem && window.PassiveSystem[this.passiveName];
       if (pass && pass.onDamage) {
         const evades = pass.onDamage(this, amount);
-        if (evades) return false; 
+        if (evades) {
+          specialEffects.push({
+            type: 'substitution_log',
+            x: this.x,
+            y: this.y,
+            life: 30
+          });
+          return false;
+        }
       }
 
       this.hp -= amount; 
@@ -302,7 +310,6 @@ var BattleSystem = (() => {
       const margin = this.radius + 12; 
       let bounced = false; 
 
-      // DETERMINISTIC WALL BOUNCE (NO SEEDED RANDOM CORRUPTION)
       const bounceAngleNoise = ((matchTimer % 7) - 3) * 0.08;
 
       if (this.x - margin < 0) { this.x = margin; this.vx = Math.abs(this.vx); this.vy += bounceAngleNoise; bounced = true; } 
@@ -333,7 +340,6 @@ var BattleSystem = (() => {
         }
       }
 
-      // FLOAT PRECISION CLAMPING (Prevents JS Engine V8 vs WebKit Desync)
       this.x = Math.round(this.x * 100) / 100;
       this.y = Math.round(this.y * 100) / 100;
       this.vx = Math.round(this.vx * 100) / 100;
@@ -541,7 +547,6 @@ var BattleSystem = (() => {
     }, 1800);
   }
 
-  // ITEM SPAWNER WITH STRICT PRNG CONSUMPTION (EXACTLY 3 PRNG CALLS PER SPAWN)
   function spawnItems() {
     if (isIntroSequence) return;
     spawnTimer++;
@@ -1479,7 +1484,7 @@ var BattleSystem = (() => {
         if (eff.life === 20 && !eff.hasAttacked) {
           eff.hasAttacked = true;
           if (eff.target && !eff.target.isInvincible) {
-            const dragonDmg = Math.round(eff.damage * getDamageScale());
+            const dragonDmg = Math.round((eff.damage || 18) * getDamageScale());
             const tookDmg = eff.target.takeDamage(dragonDmg);
             if (tookDmg) {
               const angle = Math.atan2(eff.target.y - eff.owner.y, eff.target.x - eff.owner.x);
@@ -1518,8 +1523,8 @@ var BattleSystem = (() => {
         ctx.lineWidth = 2;
         ctx.stroke();
       } else if (eff.type === 'cherry_blossom_flash') {
-        const elapsed = eff.maxLife - eff.life;
-        const target = eff.target;
+        const elapsed = (eff.maxLife || 45) - eff.life;
+        const target = eff.target || balls[0];
 
         for (let p = 0; p < 8; p++) {
           const px = (target.x + Math.sin(elapsed * 0.1 + p) * 100) % SIM_WIDTH;
@@ -1530,14 +1535,14 @@ var BattleSystem = (() => {
           ctx.restore();
         }
       } else if (eff.type === 'celestial_dragon') {
-        const elapsed = eff.maxLife - eff.life;
-        const progress = elapsed / eff.maxLife;
+        const elapsed = (eff.maxLife || 45) - eff.life;
+        const progress = elapsed / (eff.maxLife || 45);
 
         ctx.fillStyle = `rgba(255, 30, 0, ${Math.sin(progress * Math.PI) * 0.35})`;
         ctx.fillRect(0, 0, SIM_WIDTH, SIM_HEIGHT);
 
-        const target = eff.target;
-        const owner = eff.owner;
+        const target = eff.target || balls[1];
+        const owner = eff.owner || balls[0];
         const startX = owner.x;
         const startY = owner.y;
 
@@ -1568,13 +1573,18 @@ var BattleSystem = (() => {
         ctx.moveTo(eff.x1, eff.y1);
         ctx.lineTo(eff.x2, eff.y2);
         ctx.stroke();
+      } else if (eff.type === 'substitution_log') {
+        ctx.save();
+        ctx.translate(eff.x, eff.y);
+        drawCachedEmoji(ctx, '🪵', 32);
+        ctx.restore();
       }
 
       ctx.restore();
     });
   }
 
-  // HEADLESS MATCH GENERATOR
+  // HEADLESS MATCH GENERATOR WITH FULL SPECIAL EFFECT SERIALIZATION
   function generateReplay(p1Data, p2Data, seed = 123456789) {
     setSeed(seed);
     const originalMathRandom = Math.random;
@@ -1635,14 +1645,51 @@ var BattleSystem = (() => {
       }
 
       frames.push({
-        p1: { x: balls[0].x, y: balls[0].y, hp: Math.ceil(balls[0].hp), lives: balls[0].lives, wAngle: Math.round(balls[0].weaponAngle * 100) / 100, rage: balls[0].hasTriggeredRage },
-        p2: { x: balls[1].x, y: balls[1].y, hp: Math.ceil(balls[1].hp), lives: balls[1].lives, wAngle: Math.round(balls[1].weaponAngle * 100) / 100, rage: balls[1].hasTriggeredRage },
+        p1: { 
+          x: balls[0].x, y: balls[0].y, 
+          hp: Math.ceil(balls[0].hp), lives: balls[0].lives, 
+          wAngle: Math.round(balls[0].weaponAngle * 100) / 100, 
+          rage: balls[0].hasTriggeredRage,
+          shield: balls[0].shieldTimer,
+          immune: balls[0].immunityTimer,
+          burn: balls[0].burnTimer,
+          stun: balls[0].stunTimer,
+          silence: balls[0].silenceTimer,
+          hypnosis: balls[0].hypnosisTimer,
+          invisible: balls[0].invisibleTimer,
+          turtle: balls[0].turtleShellTimer
+        },
+        p2: { 
+          x: balls[1].x, y: balls[1].y, 
+          hp: Math.ceil(balls[1].hp), lives: balls[1].lives, 
+          wAngle: Math.round(balls[1].weaponAngle * 100) / 100, 
+          rage: balls[1].hasTriggeredRage,
+          shield: balls[1].shieldTimer,
+          immune: balls[1].immunityTimer,
+          burn: balls[1].burnTimer,
+          stun: balls[1].stunTimer,
+          silence: balls[1].silenceTimer,
+          hypnosis: balls[1].hypnosisTimer,
+          invisible: balls[1].invisibleTimer,
+          turtle: balls[1].turtleShellTimer
+        },
         items: items.map(it => ({ x: Math.round(it.x), y: Math.round(it.y), icon: it.icon })),
         projectiles: projectiles.map(pr => ({ x: Math.round(pr.x), y: Math.round(pr.y), type: pr.type, spinAngle: Math.round((pr.spinAngle || 0) * 10) / 10 })),
         hazards: hazards.map(h => ({ x: Math.round(h.x), y: Math.round(h.y), radius: h.radius, type: h.type })),
         obstacles: obstacles.map(o => ({ x: Math.round(o.x), y: Math.round(o.y), type: o.type })),
         ghosts: ghosts.map(g => ({ x: Math.round(g.x), y: Math.round(g.y) })),
         airstrikes: airstrikes.map(a => ({ x: Math.round(a.x), y: Math.round(a.y), radius: a.radius, exploded: a.exploded })),
+        specialEffects: specialEffects.map(eff => ({
+          type: eff.type,
+          x: Math.round(eff.x || 0),
+          y: Math.round(eff.y || 0),
+          x1: Math.round(eff.x1 || 0), y1: Math.round(eff.y1 || 0),
+          x2: Math.round(eff.x2 || 0), y2: Math.round(eff.y2 || 0),
+          targetX: Math.round(eff.targetX || 0), targetY: Math.round(eff.targetY || 0),
+          life: eff.life, maxLife: eff.maxLife || 45,
+          ownerP1: eff.owner ? eff.owner.isP1 : true,
+          targetP1: eff.target ? eff.target.isP1 : false
+        })),
         events: currentFrameEvents
       });
     }
@@ -1653,7 +1700,7 @@ var BattleSystem = (() => {
     return { frames, winnerSlot, seed };
   }
 
-  // PLAYBACK ENGINE WITH DYNAMIC SCREEN SCALING
+  // PLAYBACK ENGINE WITH DYNAMIC SCREEN SCALING & FULL EFFECT RENDERING
   function startPlayback(replayData, p1Data, p2Data, callback) {
     activeReplay = replayData;
     onBattleComplete = callback;
@@ -1709,13 +1756,36 @@ var BattleSystem = (() => {
         projectiles = frameData.projectiles || []; drawProjectiles();
         ghosts = frameData.ghosts || []; drawGhosts();
 
+        specialEffects = (frameData.specialEffects || []).map(eff => ({
+          ...eff,
+          owner: eff.ownerP1 ? balls[0] : balls[1],
+          target: eff.targetP1 ? balls[0] : balls[1]
+        }));
+        drawSpecialEffects();
+
         balls[0].x = frameData.p1.x; balls[0].y = frameData.p1.y;
         balls[0].hp = frameData.p1.hp; balls[0].lives = frameData.p1.lives;
         balls[0].weaponAngle = frameData.p1.wAngle; balls[0].hasTriggeredRage = frameData.p1.rage;
+        balls[0].shieldTimer = frameData.p1.shield || 0;
+        balls[0].immunityTimer = frameData.p1.immune || 0;
+        balls[0].burnTimer = frameData.p1.burn || 0;
+        balls[0].stunTimer = frameData.p1.stun || 0;
+        balls[0].silenceTimer = frameData.p1.silence || 0;
+        balls[0].hypnosisTimer = frameData.p1.hypnosis || 0;
+        balls[0].invisibleTimer = frameData.p1.invisible || 0;
+        balls[0].turtleShellTimer = frameData.p1.turtle || 0;
 
         balls[1].x = frameData.p2.x; balls[1].y = frameData.p2.y;
         balls[1].hp = frameData.p2.hp; balls[1].lives = frameData.p2.lives;
         balls[1].weaponAngle = frameData.p2.wAngle; balls[1].hasTriggeredRage = frameData.p2.rage;
+        balls[1].shieldTimer = frameData.p2.shield || 0;
+        balls[1].immunityTimer = frameData.p2.immune || 0;
+        balls[1].burnTimer = frameData.p2.burn || 0;
+        balls[1].stunTimer = frameData.p2.stun || 0;
+        balls[1].silenceTimer = frameData.p2.silence || 0;
+        balls[1].hypnosisTimer = frameData.p2.hypnosis || 0;
+        balls[1].invisibleTimer = frameData.p2.invisible || 0;
+        balls[1].turtleShellTimer = frameData.p2.turtle || 0;
 
         balls[0].draw(); balls[1].draw();
         items = frameData.items || []; drawItems();
