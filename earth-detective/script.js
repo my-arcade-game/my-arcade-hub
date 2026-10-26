@@ -8,6 +8,9 @@ let targetLng = 0;
 let locationsList = [];
 let usedLocations = [];
 
+// Preload Cache Pool (Keeps up to 5 upcoming images in memory)
+const imageCachePool = [];
+
 // Map Markers & Lines
 let userMarker = null;
 let opponentMarker = null;
@@ -88,6 +91,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const playerButtons = document.getElementById('player-buttons');
     const startBtn = document.getElementById('start-game-btn');
 
+    // Preload next 5 fallback locations right away
+    preloadNext5Images(fallbackLocations);
+
     if (roomCode) {
         await Multiplayer.init();
         isMultiplayerActive = true;
@@ -124,7 +130,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectedPlayerCount = 2;
                 targetLat = data.targetLat;
                 targetLng = data.targetLng;
-                document.getElementById('location-photo').src = data.photoPic;
+
+                const photoEl = document.getElementById('location-photo');
+                photoEl.src = data.photoPic;
 
                 players = [
                     { id: 1, hp: maxHpSetting, alive: true, currentGuess: null },
@@ -139,7 +147,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const data = payload.payload;
                 targetLat = data.targetLat;
                 targetLng = data.targetLng;
-                document.getElementById('location-photo').src = data.photoPic;
+
+                const photoEl = document.getElementById('location-photo');
+                photoEl.src = data.photoPic;
                 startSimultaneousRound();
             });
 
@@ -159,6 +169,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 });
+
+// --- PRELOAD EXACTLY NEXT 5 IMAGES ---
+function preloadNext5Images(sourceList) {
+    const list = sourceList || locationsList;
+    if (!list || !list.length) return;
+
+    // Slice up to 5 items ahead
+    const next5 = list.slice(-5);
+    next5.forEach(loc => {
+        if (loc && loc.pic) {
+            const img = new Image();
+            img.src = loc.pic;
+            imageCachePool.push(img);
+        }
+    });
+}
 
 // --- AUDIO SYNTHESIZER FOR MEASUREMENT & DAMAGE IMPACT ---
 function initWebAudio() {
@@ -475,6 +501,8 @@ async function fetchWikipediaLocations() {
         console.warn("Wikipedia fetch failed, shuffling fallback list:", error);
         locationsList = shuffleArray([...fallbackLocations]);
     }
+    // Preload next 5 from fetched location list
+    preloadNext5Images(locationsList);
 }
 fetchWikipediaLocations();
 
@@ -484,6 +512,10 @@ function getRandomLocation() {
     }
     const loc = locationsList.pop();
     usedLocations.push(loc);
+
+    // Keep preloading next 5 images ahead
+    preloadNext5Images(locationsList);
+
     return loc;
 }
 
@@ -491,7 +523,9 @@ function loadNewRound() {
     const currentLocation = getRandomLocation();
     targetLat = currentLocation.lat;
     targetLng = currentLocation.lng;
-    document.getElementById('location-photo').src = currentLocation.pic;
+    
+    const photoEl = document.getElementById('location-photo');
+    photoEl.src = currentLocation.pic;
 
     if (isMultiplayerActive && isHost && Multiplayer.channel) {
         Multiplayer.channel.send({
@@ -593,7 +627,9 @@ document.getElementById('start-game-btn').addEventListener('click', function() {
     const initialLocation = getRandomLocation();
     targetLat = initialLocation.lat;
     targetLng = initialLocation.lng;
-    document.getElementById('location-photo').src = initialLocation.pic;
+    
+    const photoEl = document.getElementById('location-photo');
+    photoEl.src = initialLocation.pic;
 
     if (isMultiplayerActive && isHost && Multiplayer.channel) {
         Multiplayer.channel.send({
@@ -684,10 +720,30 @@ function startSimultaneousRound() {
     refreshArenaUIDashboard();
     toggleMap(true);
 
-    setTimeout(() => {
+    // Set Timer to Loading State until Photo is Completely Revealed
+    const timerDisplay = document.getElementById('timer-display');
+    if (timerDisplay) {
+        timerDisplay.innerText = "⌛ LOADING...";
+        timerDisplay.classList.remove('panic');
+    }
+
+    stopRoundClockCountdown();
+
+    const photoEl = document.getElementById('location-photo');
+    let timerStarted = false;
+
+    const onPhotoReady = () => {
+        if (timerStarted) return;
+        timerStarted = true;
         map.invalidateSize();
         startRoundClockCountdown();
-    }, 100);
+    };
+
+    if (photoEl.complete && photoEl.naturalWidth !== 0) {
+        onPhotoReady();
+    } else {
+        photoEl.onload = onPhotoReady;
+    }
 }
 
 function startRoundClockCountdown() {
@@ -810,7 +866,6 @@ async function evaluateRoundResults() {
 
             playerStats.push({ player: p, distKm, latLng: pLatLng });
         } else {
-            // Penalty for missed guess: set very high distance
             playerStats.push({ player: p, distKm: 15000, latLng: null });
         }
     });
@@ -819,7 +874,6 @@ async function evaluateRoundResults() {
         map.fitBounds(L.latLngBounds(boundsGroup), { padding: [50, 50] });
     }
 
-    // Expand map so measurement lines and pins are fully visible
     if (!isMapExpanded) toggleMapExpand();
 
     // 3. Trigger Measuring Animation & Measurement SFX
@@ -838,7 +892,6 @@ async function evaluateRoundResults() {
             if (stat.player.id === myPlayerId) userLine = line;
             else opponentLine = line;
 
-            // Display distance tooltip on map
             const midLat = (stat.latLng[0] + targetLat) / 2;
             const midLng = (stat.latLng[1] + targetLng) / 2;
             const popup = L.popup({ autoClose: false, closeOnClick: false, className: 'distance-popup' })
@@ -849,24 +902,20 @@ async function evaluateRoundResults() {
         }
     });
 
-    // Wait for measuring lines and audio to complete
     await new Promise(r => setTimeout(r, 1400));
 
     // 4. Calculate GeoGuessr Farthest vs Closest HP Damage
-    // Distances: Player with min distance takes 0 damage; player with max distance takes (max - min) damage
     let damageLog = [];
     if (playerStats.length >= 2) {
         playerStats.sort((a, b) => a.distKm - b.distKm);
-        const winnerStat = playerStats[0]; // Shortest distance (closest)
-        const loserStat = playerStats[playerStats.length - 1]; // Farthest distance
+        const winnerStat = playerStats[0];
+        const loserStat = playerStats[playerStats.length - 1];
 
         const damageDiff = loserStat.distKm - winnerStat.distKm;
 
         if (damageDiff > 0) {
-            // Apply damage to loser
             loserStat.player.hp = Math.max(0, loserStat.player.hp - damageDiff);
 
-            // Animate floating damage popup towards loser's HUD row & shake
             triggerDamagePopupAndShake(loserStat.player.id, damageDiff);
 
             damageLog.push(`🎯 Player ${winnerStat.player.id} was closest! (${winnerStat.distKm.toLocaleString()} km)`);
@@ -918,9 +967,8 @@ function triggerDamagePopupAndShake(targetPlayerId, damageAmount) {
     playDamageHitSound();
 
     if (targetRow) {
-        // Apply HUD Shake effect
         targetRow.classList.remove('hp-hit-shake');
-        void targetRow.offsetWidth; // Trigger reflow
+        void targetRow.offsetWidth;
         targetRow.classList.add('hp-hit-shake');
 
         setTimeout(() => targetRow.classList.remove('hp-hit-shake'), 600);
@@ -932,7 +980,6 @@ function triggerDamagePopupAndShake(targetPlayerId, damageAmount) {
         popup.className = 'floating-damage-text';
         popup.innerText = `-${damageAmount.toLocaleString()}`;
         
-        // Position damage text over target player's health bar
         popup.style.left = `${rect.left + rect.width / 2}px`;
         popup.style.top = `${rect.top + 10}px`;
 
